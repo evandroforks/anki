@@ -31,7 +31,7 @@ CheckMediaResponse = media_pb2.CheckMediaResponse
 
 class MediaManager(DeprecatedNamesMixin):
 
-    sound_regexps = [r"(?i)(\[sound:(?P<fname>[^]]+)\])"]
+    sound_regexps = [r"(?i)(\[sound:(?P<fname>[^\]|]+)(?:\|(?P<args>[^\]]+))?\])"]
     html_media_regexps = [
         # src element quoted case
         r"(?i)(<(?:img|audio)\b[^>]* src=(?P<str>[\"'])(?P<fname>[^>]+?)(?P=str)[^>]*>)",
