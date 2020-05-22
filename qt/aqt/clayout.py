@@ -477,6 +477,9 @@ class CardLayout(QDialog):
             c.ord, self.night_mode_is_enabled
         )
 
+        if not self.have_autoplayed:
+            self.preview_web.eval("ankimedia._reset();")
+
         if self.pform.preview_front.isChecked():
             q = ti(self.mw.prepare_card_text_for_display(c.q()))
             q = gui_hooks.card_will_show(q, c, "clayoutQuestion")
@@ -487,7 +490,6 @@ class CardLayout(QDialog):
             text = a
 
         # use _showAnswer to avoid the longer delay
-        self.preview_web.eval("ankimedia._reset();")
         self.preview_web.eval("_showAnswer(%s,'%s');" % (json.dumps(text), bodyclass))
         self.preview_web.eval(
             f"_emulateMobile({json.dumps(self.mobile_emulation_enabled)});"
