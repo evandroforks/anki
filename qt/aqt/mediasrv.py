@@ -3,14 +3,17 @@
 
 from __future__ import annotations
 
+import datetime
 import logging
 import os
 import re
+import socket
 import sys
 import threading
 import time
 import traceback
-from http import HTTPStatus
+from contextlib import contextmanager
+from http import HTTPStatus, client
 from typing import Tuple
 
 import flask
@@ -30,6 +33,15 @@ from aqt.deckoptions import DeckOptionsDialog
 from aqt.operations.deck import update_deck_configs
 from aqt.qt import *
 from aqt.utils import aqt_data_folder
+
+
+@contextmanager
+def http_connection(*args, **kwds):
+    resource = client.HTTPConnection(*args, **kwds)
+    try:
+        yield resource
+    finally:
+        resource.close()
 
 
 def _getExportFolder() -> str:
@@ -102,6 +114,41 @@ class MediaServer(threading.Thread):
     def getPort(self) -> int:
         self._ready.wait()
         return int(self.server.effective_port)  # type: ignore
+
+    def getHost(self) -> str:
+        self._ready.wait()
+        return str(self.server.effective_host)  # type: ignore
+
+    def wait_start_up(self):
+        self.check_server(self.getHost(), self.getPort(), "/favicon.ico")
+
+    @classmethod
+    def check_server(cls, host, port, path_info="/", timeout=3, retries=30):
+        """Perform a request until the server reply"""
+        if retries < 0:
+            return 0
+        # https://github.com/Pylons/webtest/blob/4b8a3ebf984185ff4fefb31b4d0cf82682e1fcf7/webtest/http.py#L123-L132
+        for index in range(retries):
+            if devMode or index > 0:
+                print(
+                    f"{datetime.datetime.now()} waiting media server on {host}:{port}..."
+                )
+            try:
+                with http_connection(host, port, timeout=timeout) as conn:
+                    conn.request("GET", path_info)
+                    res = conn.getresponse()
+                    return res.status
+            except (socket.error, client.HTTPException):
+                time.sleep(0.3)
+        return 0
+
+
+@app.route("/favicon.ico")
+def favicon():
+    iconpath = os.path.join(_exportFolder, "imgs", "favicon.ico")
+    return flask.send_file(
+        iconpath, mimetype="image/vnd.microsoft.icon", conditional=True
+    )
 
 
 @app.route("/<path:pathin>", methods=["GET", "POST"])
