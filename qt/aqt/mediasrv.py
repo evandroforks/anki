@@ -86,14 +86,12 @@ class MediaServer(threading.Thread):
 
             self._ready.set()
             self.server.run()
-            print("Close media server")
 
         except Exception:
             if not self.is_shutdown:
                 raise
 
     def shutdown(self) -> None:
-        print("Starting to close media server")
         self.is_shutdown = True
         sockets = list(self.server._map.values())  # type: ignore
         for socket in sockets:
