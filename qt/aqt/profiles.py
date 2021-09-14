@@ -308,10 +308,6 @@ class ProfileManager:
             print("resetting corrupt profile")
             self.profile = profileConf.copy()
             self.save()
-        finally:
-            from aqt import utils as aqtUtils
-
-            aqtUtils.QsciEnabled = self.syntax_highlight()
         return True
 
     def save(self) -> None:
@@ -617,15 +613,6 @@ create table if not exists profiles
 
     # Profile-specific
     ######################################################################
-
-    def syntax_highlight(self) -> bool:
-        return self.profile.get("syntax_highlight", True)
-
-    def set_syntax_highlight(self, val: bool) -> None:
-        from aqt import utils as aqtUtils
-
-        aqtUtils.QsciEnabled = val
-        self.profile["syntax_highlight"] = val
 
     def set_sync_key(self, val: Optional[str]) -> None:
         self.profile["syncKey"] = val
