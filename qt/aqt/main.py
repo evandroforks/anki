@@ -2,6 +2,7 @@
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 from __future__ import annotations
 
+import datetime
 import enum
 import gc
 import os
@@ -421,10 +422,15 @@ class AnkiQt(QMainWindow):
 
     def unloadProfile(self, onsuccess: Callable) -> None:
         def callback() -> None:
+            print(f"{datetime.datetime.now()} Starting callback")
             self._unloadProfile()
+            print(f"{datetime.datetime.now()} Ending _unloadProfile")
             onsuccess()
+            print(f"{datetime.datetime.now()} Ending onsuccess")
 
+        print(f"{datetime.datetime.now()} Starting gui_hooks.profile_will_close()")
         gui_hooks.profile_will_close()
+        print(f"{datetime.datetime.now()} Ending gui_hooks.profile_will_close()")
         self.unloadCollection(callback)
 
     def _unloadProfile(self) -> None:
@@ -448,12 +454,14 @@ class AnkiQt(QMainWindow):
                     print(f"Window should have been closed: {w}")
 
     def unloadProfileAndExit(self) -> None:
+        print(f"{datetime.datetime.now()} Starting unloadProfileAndExit")
         self.unloadProfile(self.cleanupAndExit)
 
     def unloadProfileAndShowProfileManager(self) -> None:
         self.unloadProfile(self.showProfileManager)
 
     def cleanupAndExit(self) -> None:
+        print(f"{datetime.datetime.now()} Starting cleanupAndExit")
         self.errorHandler.unload()
         self.mediaServer.shutdown()
         self.app.exit(0)
@@ -529,15 +537,18 @@ class AnkiQt(QMainWindow):
             onsuccess()
 
         def after_sync() -> None:
+            print(f"{datetime.datetime.now()} Starting after_sync")
             self.media_syncer.show_diag_until_finished(after_media_sync)
 
         def before_sync() -> None:
+            print(f"{datetime.datetime.now()} Starting before_sync")
             self.setEnabled(False)
             self.maybe_auto_sync_on_open_close(after_sync)
 
         self.closeAllWindows(before_sync)
 
     def _unloadCollection(self) -> None:
+        print(f"{datetime.datetime.now()} Starting _unloadCollection")
         if not self.col:
             return
         if self.restoringBackup:
@@ -545,15 +556,18 @@ class AnkiQt(QMainWindow):
         else:
             label = tr.qt_misc_backing_up()
         self.progress.start(label=label)
+        print(f"{datetime.datetime.now()} Ending qt_misc_backing_up")
         corrupt = False
         try:
             self.maybeOptimize()
+            print(f"{datetime.datetime.now()} Ending maybeOptimize")
             if not devMode:
                 corrupt = self.col.db.scalar("pragma quick_check") != "ok"
         except:
             corrupt = True
         try:
             self.col.close(downgrade=False)
+            print(f"{datetime.datetime.now()} Ending self.col.close")
         except Exception as e:
             print(e)
             corrupt = True
@@ -564,6 +578,7 @@ class AnkiQt(QMainWindow):
             showWarning(tr.qt_misc_your_collection_file_appears_to_be())
         if not corrupt and not self.restoringBackup:
             self.backup()
+        print(f"{datetime.datetime.now()} Ending backup")
 
     def _close_for_full_download(self) -> None:
         "Backup and prepare collection to be overwritten."
@@ -840,6 +855,11 @@ title="{}" {}>{}</button>""".format(
             for webview in self.web, self.bottomWeb:
                 webview.force_load_hack()
 
+        if qtmajor == 5 and qtminor >= 11 or qtmajor > 5:
+            self.web._page.settings().setAttribute(
+                QWebEngineSettings.PlaybackRequiresUserGesture, False
+            )
+
     def closeAllWindows(self, onsuccess: Callable) -> None:
         aqt.dialogs.closeAll(onsuccess)
 
@@ -1009,6 +1029,7 @@ title="{}" {}>{}</button>""".format(
             ("a", self.onAddCard),
             ("b", self.onBrowse),
             ("t", self.onStats),
+            ("Ctrl+t", self.onStats),
             ("y", self.on_sync_button_clicked),
         ]
         self.applyShortcuts(globalShortcuts)
@@ -1671,6 +1692,7 @@ title="{}" {}>{}</button>""".format(
     def setupMediaServer(self) -> None:
         self.mediaServer = aqt.mediasrv.MediaServer(self)
         self.mediaServer.start()
+        self.mediaServer.wait_start_up()
 
     def baseHTML(self) -> str:
         return f'<base href="{self.serverURL()}">'

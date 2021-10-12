@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import builtins
 import cProfile
+import datetime
 import getpass
 import locale
 import os
@@ -60,6 +61,11 @@ profiler: Optional[cProfile.Profile] = None
 mw: Optional[AnkiQt] = None  # set on init
 
 import aqt.forms
+
+import tracemalloc
+
+tracemalloc.start()
+
 
 # Dialog manager
 ##########################################################################
@@ -118,13 +124,16 @@ class DialogManager:
         return not any(x[1] for x in self._dialogs.values())
 
     def closeAll(self, onsuccess: Callable[[], None]) -> Optional[bool]:
+        print(f"{datetime.datetime.now()} Starting closeAll")
         # can we close immediately?
         if self.allClosed():
+            print(f"{datetime.datetime.now()} After self.allClosed")
             onsuccess()
             return None
 
         # ask all windows to close and await a reply
         for (name, (creator, instance)) in self._dialogs.items():
+            print(f"{datetime.datetime.now()} After for (name, (creator, instance))")
             if not instance:
                 continue
 
@@ -136,10 +145,18 @@ class DialogManager:
                     pass
 
             if getattr(instance, "silentlyClose", False):
+                print(
+                    f'{datetime.datetime.now()} After getattr(instance, "silentlyClose", False)'
+                )
                 instance.close()
+                print(f"{datetime.datetime.now()} After instance.close()")
                 callback()
+                print(f"{datetime.datetime.now()} After instance callback()")
             else:
                 instance.closeWithCallback(callback)
+                print(
+                    f"{datetime.datetime.now()} After instance.closeWithCallback(callback)"
+                )
 
         return True
 
@@ -261,6 +278,9 @@ class AnkiApp(QApplication):
     TMOUT = 30000
 
     def __init__(self, argv: list[str]) -> None:
+        # # https://stackoverflow.com/questions/33730771/qtwebengine-not-allowed-to-load-local-resource-for-iframe-how-to-disable-web
+        # # Enable it only for local tests due security issues
+        # sys.argv.append("--disable-web-security")
         QApplication.__init__(self, argv)
         self._argv = argv
 
