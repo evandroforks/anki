@@ -849,6 +849,16 @@ title="{}" {}>{}</button>""".format(
             for webview in self.web, self.bottomWeb:
                 webview.force_load_hack()
 
+        if qtmajor > 5 and qtminor > 1:
+            self.web._page.settings().setAttribute(
+                PyQt6.QtWebEngineCore.QWebEngineSettings.WebAttribute.PlaybackRequiresUserGesture,
+                False,
+            )
+        elif qtmajor == 5 and qtminor >= 11:
+            self.web._page.settings().setAttribute(
+                QWebEngineSettings.PlaybackRequiresUserGesture, False
+            )
+
     def closeAllWindows(self, onsuccess: Callable) -> None:
         aqt.dialogs.closeAll(onsuccess)
 
@@ -1018,6 +1028,7 @@ title="{}" {}>{}</button>""".format(
             ("a", self.onAddCard),
             ("b", self.onBrowse),
             ("t", self.onStats),
+            ("Ctrl+t", self.onStats),
             ("y", self.on_sync_button_clicked),
         ]
         self.applyShortcuts(globalShortcuts)
@@ -1680,6 +1691,7 @@ title="{}" {}>{}</button>""".format(
     def setupMediaServer(self) -> None:
         self.mediaServer = aqt.mediasrv.MediaServer(self)
         self.mediaServer.start()
+        self.mediaServer.wait_start_up()
 
     def baseHTML(self) -> str:
         return f'<base href="{self.serverURL()}">'
