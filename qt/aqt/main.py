@@ -56,6 +56,7 @@ from aqt.utils import (
     checkInvalidFilename,
     current_window,
     disable_help_button,
+    enable_javascript_playback,
     getFile,
     getOnlyText,
     openHelp,
@@ -849,15 +850,7 @@ title="{}" {}>{}</button>""".format(
             for webview in self.web, self.bottomWeb:
                 webview.force_load_hack()
 
-        if qtmajor > 5 and qtminor > 1:
-            self.web._page.settings().setAttribute(
-                PyQt6.QtWebEngineCore.QWebEngineSettings.WebAttribute.PlaybackRequiresUserGesture,
-                False,
-            )
-        elif qtmajor == 5 and qtminor >= 11:
-            self.web._page.settings().setAttribute(
-                QWebEngineSettings.PlaybackRequiresUserGesture, False
-            )
+        enable_javascript_playback(self.web._page.settings())
 
     def closeAllWindows(self, onsuccess: Callable) -> None:
         aqt.dialogs.closeAll(onsuccess)

@@ -847,6 +847,18 @@ def qtMenuShortcutWorkaround(qmenu: QMenu) -> None:
 ######################################################################
 
 
+def enable_javascript_playback(page_settings: Any) -> None:
+    if qtmajor > 5 and qtminor > 1:
+        page_settings.setAttribute(
+            PyQt6.QtWebEngineCore.QWebEngineSettings.WebAttribute.PlaybackRequiresUserGesture,
+            False,
+        )
+    elif qtmajor == 5 and qtminor >= 11:
+        page_settings.setAttribute(
+            QWebEngineSettings.PlaybackRequiresUserGesture, False  # type: ignore
+        )
+
+
 def supportText() -> str:
     import platform
     import time
