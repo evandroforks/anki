@@ -610,8 +610,8 @@ def restore_is_checked(widget: QCheckBox, key: str) -> None:
 def save_combo_index_for_session(widget: QComboBox, key: str) -> None:
     textKey = f"{key}ComboActiveText"
     indexKey = f"{key}ComboActiveIndex"
-    aqt.mw.pm.session[textKey] = widget.currentText()
-    aqt.mw.pm.session[indexKey] = widget.currentIndex()
+    aqt.mw.pm.profile[textKey] = widget.currentText()
+    aqt.mw.pm.profile[indexKey] = widget.currentIndex()
 
 
 def restore_combo_index_for_session(
@@ -619,8 +619,8 @@ def restore_combo_index_for_session(
 ) -> None:
     textKey = f"{key}ComboActiveText"
     indexKey = f"{key}ComboActiveIndex"
-    text = aqt.mw.pm.session.get(textKey)
-    index = aqt.mw.pm.session.get(indexKey)
+    text = aqt.mw.pm.profile.get(textKey)
+    index = aqt.mw.pm.profile.get(indexKey)
     if text is not None and index is not None:
         if index < len(history) and history[index] == text:
             widget.setCurrentIndex(index)
@@ -643,12 +643,12 @@ def save_combo_history(comboBox: QComboBox, history: list[str], name: str) -> st
 def restore_combo_history(comboBox: QComboBox, name: str) -> list[str]:
     name += "BoxHistory"
     history = aqt.mw.pm.profile.get(name, [])
-    comboBox.addItems([""] + history)
+    comboBox.addItems(history)
     if history:
         session_input = aqt.mw.pm.session.get(name)
         if session_input and session_input == history[0]:
             comboBox.lineEdit().setText(session_input)
-            comboBox.lineEdit().selectAll()
+    comboBox.lineEdit().selectAll()
     return history
 
 
@@ -845,6 +845,18 @@ def qtMenuShortcutWorkaround(qmenu: QMenu) -> None:
 
 
 ######################################################################
+
+
+def enable_javascript_playback(page_settings: Any) -> None:
+    if qtmajor > 5 and qtminor > 1:
+        page_settings.setAttribute(
+            PyQt6.QtWebEngineCore.QWebEngineSettings.WebAttribute.PlaybackRequiresUserGesture,
+            False,
+        )
+    elif qtmajor == 5 and qtminor >= 11:
+        page_settings.setAttribute(
+            QWebEngineSettings.PlaybackRequiresUserGesture, False  # type: ignore
+        )
 
 
 def supportText() -> str:

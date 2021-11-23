@@ -22,6 +22,7 @@ from aqt.utils import (
     askUser,
     disable_help_button,
     downArrow,
+    enable_javascript_playback,
     getOnlyText,
     openHelp,
     restoreGeom,
@@ -335,11 +336,14 @@ class CardLayout(QDialog):
             js=[
                 "js/mathjax.js",
                 "js/vendor/mathjax/tex-chtml.js",
+                "js/ankimedia.js",
                 "js/reviewer.js",
             ],
             context=self,
         )
         self.preview_web.set_bridge_command(self._on_bridge_cmd, self)
+
+        enable_javascript_playback(self.preview_web._page.settings())
 
         if self._isCloze():
             nums = list(self.note.cloze_numbers_in_fields())
@@ -506,6 +510,12 @@ class CardLayout(QDialog):
             c.ord, self.night_mode_is_enabled
         )
 
+        if not self.have_autoplayed:
+            self.preview_web.eval("ankimedia._reset();")
+
+            if not c.autoplay():
+                self.preview_web.eval("ankimedia.autoplay = false;")
+
         if self.pform.preview_front.isChecked():
             q = ti(self.mw.prepare_card_text_for_display(c.question()))
             q = gui_hooks.card_will_show(q, c, "clayoutQuestion")
@@ -514,6 +524,7 @@ class CardLayout(QDialog):
             a = ti(self.mw.prepare_card_text_for_display(c.answer()), type="a")
             a = gui_hooks.card_will_show(a, c, "clayoutAnswer")
             text = a
+            self.preview_web.eval("ankimedia.skip_front = true;")
 
         # use _showAnswer to avoid the longer delay
         self.preview_web.eval(f"_showAnswer({json.dumps(text)},'{bodyclass}');")

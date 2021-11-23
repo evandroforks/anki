@@ -32,4 +32,8 @@ build:opt -c opt
 # still running, so shut them down at the end of the build.
 build:windows --worker_quit_after_build
 
+# https://forums.ankiweb.net/t/how-to-get-rid-of-these-bazel-java-processes-after-exiting-anki-dev/13039
+# startup --max_idle_secs=600
+build --disk_cache=./bazel-disk --repository_cache=./bazel-repo
+
 try-import %workspace%/user.bazelrc
