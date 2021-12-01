@@ -710,7 +710,7 @@ $editorToolbar.then(({{ toolbar }}) => toolbar.appendGroup({{
             return f'<img src="{name}">'
         else:
             av_player.play_file(fname)
-            return f"[sound:{html.escape(fname, quote=False)}]"
+            return f"[sound:{html.escape(fname, quote=False)}|fileonly]"
 
     def urlToFile(self, url: str) -> Optional[str]:
         l = url.lower()
