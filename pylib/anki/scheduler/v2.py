@@ -962,7 +962,13 @@ limit ?"""
     def _daysLate(self, card: Card) -> int:
         "Number of days later than scheduled."
         due = card.odue if card.odid else card.due
-        return max(0, self.today - due)
+        delay = max(0, self.today - due)
+        lastIvl = card.lastIvl if hasattr(card, 'lastIvl') else ( card.ivl if hasattr(card, 'ivl') else 5 )
+        lastIvl = lastIvl if lastIvl > 0 else 3
+        # print(f'{card.id} Default delay {delay}, Fixed delay {lastIvl}, Using new {lastIvl < delay}.')
+        if lastIvl < delay:
+            delay = lastIvl
+        return delay
 
     def _updateRevIvl(self, card: Card, ease: int) -> None:
         card.ivl = self._nextRevIvl(card, ease, fuzz=True)
