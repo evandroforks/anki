@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import random
 import time
+from datetime import datetime, timedelta
 from heapq import *
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -40,6 +41,21 @@ class Scheduler(SchedulerBaseWithLegacy):
     haveCustomStudy = True
     _burySiblingsOnAnswer = True
     revCount: int
+
+    @staticmethod
+    def getSource(note):
+        from anki.utils import stripHTML
+
+        if note is None:
+            return None
+
+        def tryGet(field):
+            if field in note:
+                return note[field]
+            return None
+
+        source = tryGet("Source") or tryGet("source")
+        return stripHTML(source) if source else None
 
     def __init__(self, col: anki.collection.Collection) -> None:
         super().__init__(col)
@@ -107,6 +123,59 @@ class Scheduler(SchedulerBaseWithLegacy):
                 break
             # https://anki.tenderapp.com/discussions/beta-testing/1850-cards-marked-as-buried-are-being-scheduled
             if card.queue > -1:
+                firstsource = self.getSource(card.note())
+                # print(f"{datetime.now()} getting card {card.id}, {firstsource}...")
+
+                timespacing = 7
+                timenow = datetime.now()
+
+                # rebuilds the cache if Anki stayed open over night
+                if not hasattr(self, "cardSourceIds") or self.cardSourceIdsTime + 50000 < timenow.timestamp():
+                    self.cardSourceIdsTime = timenow.timestamp()
+                    self.cardSourceIds = {}
+                    self.cardDueReviewInNextDays = set()
+                    self.cardDueReviewsInLastDays = set()
+
+                    for nid, in self.col.db.execute(f"select id from notes"):
+                        note = self.col.getNote(nid)
+                        source = self.getSource(note)
+                        if source and len(source) > 0:
+                            card_ids = note.card_ids()
+                            if source in self.cardSourceIds:
+                                self.cardSourceIds[source].extend(card_ids)
+                            else:
+                                self.cardSourceIds[source] = list(card_ids)
+
+                    timedaysago = timenow - timedelta(days=timespacing)
+                    timenowid = int(timenow.timestamp() * 1000)
+                    timedaysagoid = int(timedaysago.timestamp() * 1000)
+
+                    for cid, in self.col.db.execute(f"select cid from revlog where "
+                            f"id > {timedaysagoid} and id < {timenowid}"):
+                        self.cardDueReviewsInLastDays.add(cid)
+
+                    for cid, in self.col.db.execute(f"select id from cards where "
+                            f"queue in ({QUEUE_TYPE_LRN},{QUEUE_TYPE_REV},{QUEUE_TYPE_DAY_LEARN_RELEARN},{QUEUE_TYPE_PREVIEW}) "
+                            f"and due <= {self.today + timespacing} and due >= {self.today}"):
+                        self.cardDueReviewInNextDays.add(cid)
+
+                # only allow the user to see the next sibling card if timespacing days have passed since the last sibling
+                # this allows the user to focus in the current card and only see the next one,
+                # if he successfully remembered the current card for timespacing days at least
+                if self._burySiblingsOnAnswer and firstsource and len(firstsource) > 0:
+                    if firstsource in self.cardSourceIds:
+                        skip = False
+                        for cid in self.cardSourceIds[firstsource]:
+                            if card.id != cid:
+                                if cid in self.cardDueReviewsInLastDays and cid in self.cardDueReviewInNextDays:
+                                    print(f"{datetime.now()} Skipping card {card.id} '{card.note().note_type()['name']}' "
+                                            f"because it does has a sibling card {cid} being studied in {timespacing} days period '{firstsource}'.")
+                                    self.bury_cards([card.id], manual=False)
+                                    self._resetNew()
+                                    skip = True
+                                    break
+                        if skip:
+                            continue
                 break
         if card:
             if not self._burySiblingsOnAnswer:
@@ -1123,43 +1192,16 @@ and (queue={QUEUE_TYPE_NEW} or (queue={QUEUE_TYPE_REV} and due<=?))""",
                 pass
 
         # bury related sources
-        from anki.utils import stripHTML
-
-        def getSource(note):
-            if note is None:
-                return None
-
-            def tryGet(field):
-                if field in note:
-                    return note[field]
-                return None
-
-            source = tryGet("Source") or tryGet("source")
-            return stripHTML(source) if source else None
-
         # print(f'card.id {card.id}')
-        firstsource = getSource(card.note())
+        firstsource = self.getSource(card.note())
         burySet = set(toBury)
 
         if self._burySiblingsOnAnswer and firstsource and len(firstsource) > 0:
-            if not hasattr(self, "cardSourceIds"):
-                self.cardSourceIds = {}
-                for nid, flds in self.col.db.execute(f"select id, flds from notes"):
-                    note = self.col.getNote(nid)
-                    source = getSource(note)
-                    if source and len(source) > 0:
-                        card_ids = note.card_ids()
-                        if source in self.cardSourceIds:
-                            self.cardSourceIds[source].append((card_ids, flds))
-                        else:
-                            self.cardSourceIds[source] = [(card_ids, flds)]
-
             if firstsource in self.cardSourceIds:
-                for card_ids, flds in self.cardSourceIds[firstsource]:
-                    for cid in card_ids:
-                        if cid != card.id:
-                            # print(f"Burring source card '{cid}, {firstsource}' = '{flds}'")
-                            burySet.add(cid)
+                for cid in self.cardSourceIds[firstsource]:
+                    if cid != card.id:
+                        print(f"Burring sibling by source card '{cid}, {firstsource}'")
+                        burySet.add(cid)
         toBury = list(burySet)
 
         # then bury
