@@ -127,11 +127,10 @@ class Scheduler(SchedulerBaseWithLegacy):
                 # print(f"{datetime.now()} getting card {card.id}, {firstsource}...")
 
                 timespacing = 7
-                timenow = datetime.now()
 
                 # rebuilds the cache if Anki stayed open over night
-                if not hasattr(self, "cardSourceIds") or self.cardSourceIdsTime + 50000 < timenow.timestamp():
-                    self.cardSourceIdsTime = timenow.timestamp()
+                if not hasattr(self, "cardSourceIds") or self.cardSourceIdsTime < self.today:
+                    self.cardSourceIdsTime = self.today
                     self.cardSourceIds = {}
                     self.cardDueReviewInNextDays = set()
                     self.cardDueReviewsInLastDays = set()
@@ -146,6 +145,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                             else:
                                 self.cardSourceIds[source] = list(card_ids)
 
+                    timenow = datetime.now()
                     timedaysago = timenow - timedelta(days=timespacing)
                     timenowid = int(timenow.timestamp() * 1000)
                     timedaysagoid = int(timedaysago.timestamp() * 1000)
