@@ -163,19 +163,20 @@ class Scheduler(SchedulerBaseWithLegacy):
                 # this allows the user to focus in the current card and only see the next one,
                 # if he successfully remembered the current card for timespacing days at least
                 if self._burySiblingsOnAnswer and firstsource and len(firstsource) > 0:
-                    if firstsource in self.cardSourceIds:
-                        skip = False
-                        for cid in self.cardSourceIds[firstsource]:
-                            if card.id != cid:
-                                if cid in self.cardDueReviewsInLastDays and cid in self.cardDueReviewInNextDays:
-                                    print(f"{datetime.now()} Skipping card {card.id} '{card.note().note_type()['name']}' "
-                                            f"because it does has a sibling card {cid} being studied in {timespacing} days period '{firstsource}'.")
-                                    self.bury_cards([card.id], manual=False)
-                                    self._resetNew()
-                                    skip = True
-                                    break
-                        if skip:
-                            continue
+                    skip = False
+                    note = card.note()
+                    for cid in note.card_ids():
+                        if card.id != cid:
+                            if cid in self.cardDueReviewsInLastDays and cid in self.cardDueReviewInNextDays:
+                                print(f"{datetime.now()} Skipping card {card.id} '{card.note().note_type()['name']}' "
+                                        f"because it does has a sibling card {cid} being studied in {timespacing} days period '{firstsource}'.")
+                                self.bury_cards([card.id], manual=False)
+                                self._reset_counts()
+                                self._resetNew()
+                                skip = True
+                                break
+                    if skip:
+                        continue
                 break
         if card:
             if not self._burySiblingsOnAnswer:
