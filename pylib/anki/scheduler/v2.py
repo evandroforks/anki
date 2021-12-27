@@ -132,6 +132,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                 if not hasattr(self, "cardSourceIds") or self.cardSourceIdsTime < self.today:
                     self.cardSourceIdsTime = self.today
                     self.cardSourceIds = {}
+                    self.cardDueReviewToday = set()
                     self.cardDueReviewInNextDays = set()
                     self.cardDueReviewsInLastDays = set()
 
@@ -140,15 +141,23 @@ class Scheduler(SchedulerBaseWithLegacy):
                         source = self.getSource(note)
                         if source and len(source) > 0:
                             card_ids = note.card_ids()
-                            if source in self.cardSourceIds:
-                                self.cardSourceIds[source].extend(card_ids)
-                            else:
-                                self.cardSourceIds[source] = list(card_ids)
+                            for cid in card_ids:
+                                other_card = self.col.getCard(cid)
+                                queue_type = other_card.queue
+                                if source in self.cardSourceIds:
+                                    self.cardSourceIds[source].append((cid, queue_type))
+                                else:
+                                    self.cardSourceIds[source] = [(cid, queue_type)]
 
                     timenow = datetime.now()
                     timedaysago = timenow - timedelta(days=timespacing)
                     timenowid = int(timenow.timestamp() * 1000)
                     timedaysagoid = int(timedaysago.timestamp() * 1000)
+
+                    for cid, in self.col.db.execute(f"select id from cards where "
+                            f"queue in ({QUEUE_TYPE_LRN},{QUEUE_TYPE_REV},{QUEUE_TYPE_DAY_LEARN_RELEARN},{QUEUE_TYPE_PREVIEW}) "
+                            f"and due <= {self.today}"):
+                        self.cardDueReviewToday.add(cid)
 
                     for cid, in self.col.db.execute(f"select cid from revlog where "
                             f"id > {timedaysagoid} and id < {timenowid}"):
@@ -159,24 +168,63 @@ class Scheduler(SchedulerBaseWithLegacy):
                             f"and due <= {self.today + timespacing} and due >= {self.today}"):
                         self.cardDueReviewInNextDays.add(cid)
 
-                # only allow the user to see the next sibling card if timespacing days have passed since the last sibling
-                # this allows the user to focus in the current card and only see the next one,
-                # if he successfully remembered the current card for timespacing days at least
                 if self._burySiblingsOnAnswer and firstsource and len(firstsource) > 0:
                     skip = False
                     note = card.note()
+
+                    # only allow the user to see the next sibling card if timespacing days have passed since the last sibling
+                    # this allows the user to focus in the current card and only see the next one,
+                    # if he successfully remembered the current card for timespacing days at least
                     for cid in note.card_ids():
                         if card.id != cid:
                             if cid in self.cardDueReviewsInLastDays and cid in self.cardDueReviewInNextDays:
                                 print(f"{datetime.now()} Skipping card {card.id} '{card.note().note_type()['name']}' "
                                         f"because it does has a sibling card {cid} being studied in {timespacing} days period '{firstsource}'.")
                                 self.bury_cards([card.id], manual=False)
-                                self._reset_counts()
-                                self._resetNew()
+                                if card.queue == QUEUE_TYPE_NEW:
+                                    self._reset_counts()
+                                    self._resetNew()
                                 skip = True
                                 break
                     if skip:
                         continue
+
+                    # bury related sources
+                    burySet = set()
+                    has_new_card_buried = False
+
+                    if firstsource in self.cardSourceIds:
+                        # take another new card instead of bury review cards if a new card is coming,
+                        # skip new card if it has a sibling waiting for review,
+                        # because reviewing already know content is more important than adding more things cluttering knowledge
+                        if card.queue == QUEUE_TYPE_NEW:
+                            skip = False
+                            for cid, queue_type in self.cardSourceIds[firstsource]:
+                                if cid != card.id:
+                                    if cid in self.cardDueReviewToday:
+                                        print(f"{datetime.now()} Skipping new card {card.id} '{card.note().note_type()['name']}' "
+                                                f"by source because it has a sibling card pending review '{cid}, {firstsource}, '{queue_type}'.")
+                                        self.bury_cards([card.id], manual=False)
+                                        self._reset_counts()
+                                        self._resetNew()
+                                        skip = True
+                                        break
+                            if skip:
+                                continue
+                        else:
+                            for cid, queue_type in self.cardSourceIds[firstsource]:
+                                if cid != card.id:
+                                    print(f"{datetime.now()} Burring sibling card by source '{cid}, {firstsource}, '{queue_type}'.")
+                                    burySet.add(cid)
+                                    if queue_type == QUEUE_TYPE_NEW:
+                                        has_new_card_buried = True
+
+                        if burySet:
+                            self.bury_cards(burySet, manual=False)
+
+                        if has_new_card_buried:
+                            self._reset_counts()
+                            self._resetNew()
                 break
         if card:
             if not self._burySiblingsOnAnswer:
@@ -1191,19 +1239,6 @@ and (queue={QUEUE_TYPE_NEW} or (queue={QUEUE_TYPE_REV} and due<=?))""",
                 queue_obj.remove(cid)
             except ValueError:
                 pass
-
-        # bury related sources
-        # print(f'card.id {card.id}')
-        firstsource = self.getSource(card.note())
-        burySet = set(toBury)
-
-        if self._burySiblingsOnAnswer and firstsource and len(firstsource) > 0:
-            if firstsource in self.cardSourceIds:
-                for cid in self.cardSourceIds[firstsource]:
-                    if cid != card.id:
-                        print(f"Burring sibling by source card '{cid}, {firstsource}'")
-                        burySet.add(cid)
-        toBury = list(burySet)
 
         # then bury
         if toBury:
