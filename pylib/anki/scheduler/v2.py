@@ -193,7 +193,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                     for cid in note.card_ids():
                         if card.id != cid:
                             if cid in self.cardDueReviewsInLastDays and cid in self.cardDueReviewInNextDays:
-                                print(f"{datetime.now()} Skipping card {card.id} '{card.note().note_type()['name']}' "
+                                print(f"{datetime.now()} Skipping card {card.id} '{note.template()['name']}' "
                                         f"because it does has a sibling card {cid} being studied in {timespacing} days period '{firstsource}'.")
                                 self.bury_cards([card.id], manual=False)
                                 if card.queue == QUEUE_TYPE_NEW:
@@ -217,7 +217,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                             for cid, queue_type in self.cardSourceIds[firstsource]:
                                 if cid != card.id:
                                     if cid in self.cardDueReviewToday:
-                                        print(f"{datetime.now()} Skipping new card {card.id} '{card.note().note_type()['name']}' "
+                                        print(f"{datetime.now()} Skipping new card {card.id} '{note.template()['name']}' "
                                                 f"by source because it has a sibling card pending review '{cid}, {firstsource}, '{queue_type}'.")
                                         self.bury_cards([card.id], manual=False)
                                         self._reset_counts()
