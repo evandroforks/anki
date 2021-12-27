@@ -132,9 +132,13 @@ class Scheduler(SchedulerBaseWithLegacy):
                 if not hasattr(self, "cardSourceIds") or self.cardSourceIdsTime < self.today:
                     self.cardSourceIdsTime = self.today
                     self.cardSourceIds = {}
+                    self.cardQueuesType = {}
                     self.cardDueReviewToday = set()
                     self.cardDueReviewInNextDays = set()
                     self.cardDueReviewsInLastDays = set()
+
+                    for cid, queue in self.col.db.execute(f"select id, queue from cards"):
+                        self.cardQueuesType[cid] = queue
 
                     for nid, in self.col.db.execute(f"select id from notes"):
                         note = self.col.getNote(nid)
@@ -142,8 +146,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                         if source and len(source) > 0:
                             card_ids = note.card_ids()
                             for cid in card_ids:
-                                other_card = self.col.getCard(cid)
-                                queue_type = other_card.queue
+                                queue_type = self.cardQueuesType[cid]
                                 if source in self.cardSourceIds:
                                     self.cardSourceIds[source].append((cid, queue_type))
                                 else:
