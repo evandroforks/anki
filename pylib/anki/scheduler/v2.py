@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import random
+import functools
 import time
 from datetime import datetime, timedelta
 from heapq import *
@@ -99,8 +100,19 @@ class Scheduler(SchedulerBaseWithLegacy):
         self._resetNew()
         self._haveQueues = True
 
+    @functools.lru_cache(maxsize=1)
+    def cached_deck_due_tree(self, deck_id: DeckId, cache_life: int = 0):
+        del cache_life  # shut pylint up
+        return self.deck_due_tree(deck_id)
+
+    @staticmethod
+    def get_ttl_hash(seconds: float):
+        """Return the same value withing `seconds` time period
+        https://stackoverflow.com/questions/31771286/python-in-memory-cache-with-time-to-live"""
+        return round(time.time() / seconds)
+
     def _reset_counts(self) -> None:
-        tree = self.deck_due_tree(self._current_deck_id)
+        tree = self.cached_deck_due_tree(self._current_deck_id, cache_life=self.get_ttl_hash(30))
         node = self.col.decks.find_deck_in_tree(tree, self._current_deck_id)
         if not node:
             # current deck points to a missing deck
@@ -290,7 +302,7 @@ class Scheduler(SchedulerBaseWithLegacy):
             return False
         while self._newDids:
             did = self._newDids[0]
-            lim = min(self.queueLimit, self._deckNewLimit(did))
+            lim = min(self.queueLimit, self._deckNewLimit(did, cache_life=self.get_ttl_hash(30)))
             if lim:
                 # fill the queue with the current did
                 self._newQueue = self.col.db.list(
@@ -345,9 +357,11 @@ class Scheduler(SchedulerBaseWithLegacy):
             # shouldn't reach
             return None
 
+    @functools.lru_cache(maxsize=1024)
     def _deckNewLimit(
-        self, did: DeckId, fn: Optional[Callable[[DeckDict], int]] = None
+        self, did: DeckId, fn: Optional[Callable[[DeckDict], int]] = None, cache_life: int = 0
     ) -> int:
+        del cache_life  # shut pylint up
         if not fn:
             fn = self._deckNewLimitSingle
         sel = self.col.decks.get(did)
