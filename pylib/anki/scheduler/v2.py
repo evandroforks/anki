@@ -194,8 +194,12 @@ class Scheduler(SchedulerBaseWithLegacy):
                         for cid in note.card_ids():
                             if card.id != cid:
                                 if cid in self.cardDueReviewsInLastDays and cid in self.cardDueReviewInNextDays:
-                                    print(f"{datetime.now()} Skipping card {card.id} '{note.template()['name']}' "
-                                            f"because it does has a sibling card {cid} being studied in {timespacing} days period '{firstsource}'.")
+                                    try:
+                                        template = note.template()
+                                        print(f"{datetime.now()} Skipping card {card.id} '{template['name']}' "
+                                                f"because it does has a sibling card {cid} being studied in {timespacing} days period '{firstsource}'.")
+                                    except Exception as error:
+                                        print(f"Note {note.id} with error \"{error}\" for card {card.id}.")
                                     self.bury_cards([card.id], manual=False)
                                     if card.queue == QUEUE_TYPE_NEW:
                                         self._reset_counts()

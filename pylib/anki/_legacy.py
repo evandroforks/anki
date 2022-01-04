@@ -49,7 +49,7 @@ class DeprecatedNamesMixin:
     def __getattr__(self, name: str) -> Any:
         remapped = self._deprecated_aliases.get(name) or stringcase.snakecase(name)
         if remapped == name:
-            raise AttributeError
+            return super().__getattribute__(name)
 
         out = getattr(self, remapped)
         _print_warning(f"'{name}'", f"please use '{remapped}'")
