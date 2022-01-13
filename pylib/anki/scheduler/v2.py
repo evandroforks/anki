@@ -34,6 +34,7 @@ QueueConfig = Dict[str, Any]
 # revlog types: 0=lrn, 1=rev, 2=relrn, 3=early review
 # positive revlog intervals are in days (rev), negative in seconds (lrn)
 # odue/odid store original due/did when cards moved to filtered deck
+from anki.utils import stripHTML
 
 
 class Scheduler(SchedulerBaseWithLegacy):
@@ -44,18 +45,17 @@ class Scheduler(SchedulerBaseWithLegacy):
     revCount: int
 
     @staticmethod
-    def getSource(note):
-        from anki.utils import stripHTML
+    def tryGet(field, note):
+        if field in note:
+            return note[field]
+        return None
 
+    @classmethod
+    def getSource(cls, note):
         if note is None:
             return None
 
-        def tryGet(field):
-            if field in note:
-                return note[field]
-            return None
-
-        source = tryGet("Source") or tryGet("source")
+        source = cls.tryGet("Source", note) or cls.tryGet("source", note)
         return stripHTML(source) if source else None
 
     def __init__(self, col: anki.collection.Collection) -> None:
