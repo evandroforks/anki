@@ -205,32 +205,31 @@ class Scheduler(SchedulerBaseWithLegacy):
                     # only allow the user to see the next sibling card if timespacing days have passed since the last sibling
                     # this allows the user to focus in the current card and only see the next one,
                     # if he successfully remembered the current card for timespacing days at least
-                    if not (card.id in self.cardDueReviewsInLastDays and card.id in self.cardDueReviewInNextDays):
-                        review_next_card = False
-                        for cid in self.noteCardsIds[card.nid]:
-                            if card.id != cid:
-                                # blocks the actual card if it is detected a sibling scheduled in 7 days period.
-                                # this fails if a card is scheduled today to be due in 13 days and
-                                # after 7 days this is going skip any siblings of this card,
-                                # but it will not skip this card siblings after tomorrow up to 6 days.
-                                # as this is just a approximation of 7 days period to allow a card
-                                # to be more focused before its siblings, this error should be acceptable.
-                                if cid in self.cardDueReviewsInLastDays and cid in self.cardDueReviewInNextDays:
-                                    try:
-                                        template = self.noteTemplates[card.nid]
-                                        print(f"{datetime.now()} Skipping card {card.id} '{template['name']}' "
-                                                f"because it does has a sibling card {cid} being studied in {timespacing} days period '{firstsource}'.")
-                                    except Exception as error:
-                                        print(f"Note {card.nid} with error \"{error}\" for card {card.id}.")
-                                    self.bury_cards([card.id], manual=False)
-                                    if card.queue == QUEUE_TYPE_NEW:
-                                        self._reset_counts()
-                                        self._resetNew()
-                                    notesBlocked.add(card.nid)
-                                    review_next_card = True
-                                    break
-                        if review_next_card:
-                            continue
+                    review_next_card = False
+                    for cid in self.noteCardsIds[card.nid]:
+                        if card.id != cid:
+                            # blocks the actual card if it is detected a sibling scheduled in 7 days period.
+                            # this fails if a card is scheduled today to be due in 13 days and
+                            # after 7 days this is going skip any siblings of this card,
+                            # but it will not skip this card siblings after tomorrow up to 6 days.
+                            # as this is just a approximation of 7 days period to allow a card
+                            # to be more focused before its siblings, this error should be acceptable.
+                            if cid in self.cardDueReviewsInLastDays and cid in self.cardDueReviewInNextDays:
+                                try:
+                                    template = self.noteTemplates[card.nid]
+                                    print(f"{datetime.now()} Skipping card {card.id} '{template['name']}' "
+                                            f"because it does has a sibling card {cid} being studied in {timespacing} days period '{firstsource}'.")
+                                except Exception as error:
+                                    print(f"Note {card.nid} with error \"{error}\" for card {card.id}.")
+                                self.bury_cards([card.id], manual=False)
+                                if card.queue == QUEUE_TYPE_NEW:
+                                    self._reset_counts()
+                                    self._resetNew()
+                                notesBlocked.add(card.nid)
+                                review_next_card = True
+                                break
+                    if review_next_card:
+                        continue
 
                     # bury related sources
                     burySet = set()
