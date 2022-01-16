@@ -135,9 +135,6 @@ class Scheduler(SchedulerBaseWithLegacy):
                 break
             # https://anki.tenderapp.com/discussions/beta-testing/1850-cards-marked-as-buried-are-being-scheduled
             if card.queue > -1:
-                firstsource = self.getSource(card.note())
-                # print(f"{datetime.now()} getting card {card.id}, {firstsource}...")
-
                 timespacing = 7
 
                 # rebuilds the cache if Anki stayed open over night
@@ -145,6 +142,11 @@ class Scheduler(SchedulerBaseWithLegacy):
                     self.cardSourceIdsTime = self.today
                     self.cardSourceIds = {}
                     self.cardQueuesType = {}
+
+                    self.noteNotes = {}
+                    self.noteCardsIds = {}
+                    self.noteTemplates = {}
+
                     self.cardDueReviewToday = set()
                     self.cardDueReviewInNextDays = set()
                     self.cardDueReviewsInLastDays = set()
@@ -157,6 +159,9 @@ class Scheduler(SchedulerBaseWithLegacy):
                         source = self.getSource(note)
                         if source and len(source) > 0:
                             card_ids = note.card_ids()
+                            self.noteNotes[nid] = note
+                            self.noteCardsIds[nid] = card_ids
+                            self.noteTemplates[nid] = note.template()
                             for cid in card_ids:
                                 queue_type = self.cardQueuesType[cid]
                                 if source in self.cardSourceIds:
@@ -183,30 +188,37 @@ class Scheduler(SchedulerBaseWithLegacy):
                             f"and due <= {self.today + timespacing} and due >= {self.today}"):
                         self.cardDueReviewInNextDays.add(cid)
 
-                if self._burySiblingsOnAnswer and firstsource and len(firstsource) > 0:
-                    note = card.note()
+                firstsource = self.getSource(self.noteNotes.get(card.nid))
+                # print(f"{datetime.now()} getting card {card.id}, {firstsource}...")
 
+                if self._burySiblingsOnAnswer and firstsource and len(firstsource) > 0:
                     # only allow the user to see the next sibling card if timespacing days have passed since the last sibling
                     # this allows the user to focus in the current card and only see the next one,
                     # if he successfully remembered the current card for timespacing days at least
                     if not (card.id in self.cardDueReviewsInLastDays and card.id in self.cardDueReviewInNextDays):
-                        skip = False
-                        for cid in note.card_ids():
+                        review_next_card = False
+                        for cid in self.noteCardsIds[card.nid]:
                             if card.id != cid:
+                                # blocks the actual card if it is detected a sibling scheduled in 7 days period.
+                                # this fails if a card is scheduled today to be due in 13 days and
+                                # after 7 days this is going skip any siblings of this card,
+                                # but it will not skip this card siblings after tomorrow up to 6 days.
+                                # as this is just a approximation of 7 days period to allow a card
+                                # to be more focused before its siblings, this error should be acceptable.
                                 if cid in self.cardDueReviewsInLastDays and cid in self.cardDueReviewInNextDays:
                                     try:
-                                        template = note.template()
+                                        template = self.noteTemplates[card.nid]
                                         print(f"{datetime.now()} Skipping card {card.id} '{template['name']}' "
                                                 f"because it does has a sibling card {cid} being studied in {timespacing} days period '{firstsource}'.")
                                     except Exception as error:
-                                        print(f"Note {note.id} with error \"{error}\" for card {card.id}.")
+                                        print(f"Note {card.nid} with error \"{error}\" for card {card.id}.")
                                     self.bury_cards([card.id], manual=False)
                                     if card.queue == QUEUE_TYPE_NEW:
                                         self._reset_counts()
                                         self._resetNew()
-                                    skip = True
+                                    review_next_card = True
                                     break
-                        if skip:
+                        if review_next_card:
                             continue
 
                     # bury related sources
@@ -218,18 +230,19 @@ class Scheduler(SchedulerBaseWithLegacy):
                         # skip new card if it has a sibling waiting for review,
                         # because reviewing already know content is more important than adding more things cluttering knowledge
                         if card.queue == QUEUE_TYPE_NEW:
-                            skip = False
+                            review_next_card = False
                             for cid, queue_type in self.cardSourceIds[firstsource]:
                                 if cid != card.id:
                                     if cid in self.cardDueReviewToday:
-                                        print(f"{datetime.now()} Skipping new card {card.id} '{note.template()['name']}' "
+                                        template = self.noteTemplates[card.nid]
+                                        print(f"{datetime.now()} Skipping new card {card.id} '{template['name']}' "
                                                 f"by source because it has a sibling card pending review '{cid}, {firstsource}, '{queue_type}'.")
                                         self.bury_cards([card.id], manual=False)
                                         self._reset_counts()
                                         self._resetNew()
-                                        skip = True
+                                        review_next_card = True
                                         break
-                            if skip:
+                            if review_next_card:
                                 continue
                         else:
                             for cid, queue_type in self.cardSourceIds[firstsource]:
