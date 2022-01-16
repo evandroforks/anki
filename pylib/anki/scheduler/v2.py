@@ -58,6 +58,14 @@ class Scheduler(SchedulerBaseWithLegacy):
         source = cls.tryGet("Source", note) or cls.tryGet("source", note)
         return stripHTML(source) if source else None
 
+    @classmethod
+    def getSibling(cls, note):
+        if note is None:
+            return None
+
+        source = cls.tryGet("Sibling", note) or cls.tryGet("sibling", note)
+        return stripHTML(source) if source else None
+
     def __init__(self, col: anki.collection.Collection) -> None:
         super().__init__(col)
         self.queueLimit = 50
@@ -141,6 +149,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                 if not hasattr(self, "cardSourceIds") or self.cardSourceIdsTime < self.today:
                     self.cardSourceIdsTime = self.today
                     self.cardSourceIds = {}
+                    self.cardSiblingIds = {}
                     self.cardQueuesType = {}
                     self.cardNote = {}
 
@@ -160,6 +169,13 @@ class Scheduler(SchedulerBaseWithLegacy):
                         source = self.getSource(note)
                         if source and len(source) > 0:
                             card_ids = note.card_ids()
+                            sibling = self.getSibling(note)
+                            if sibling and len(sibling) > 0:
+                                if sibling in self.cardSiblingIds:
+                                    self.cardSiblingIds[sibling].extend(card_ids)
+                                else:
+                                    self.cardSiblingIds[sibling] = list(card_ids)
+
                             self.noteNotes[nid] = note
                             self.noteCardsIds[nid] = card_ids
                             for cid in card_ids:
@@ -197,7 +213,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                     continue
 
                 firstsource = self.getSource(self.noteNotes.get(card.nid))
-                # print(f"{datetime.now()} getting card {card.id}, {firstsource}...")
+                # print(f"{datetime.now()} getting source card {card.id}, {firstsource}...")
 
                 if self._burySiblingsOnAnswer and firstsource and len(firstsource) > 0:
                     # only allow the user to see the next sibling card if timespacing days have passed since the last sibling
@@ -205,7 +221,13 @@ class Scheduler(SchedulerBaseWithLegacy):
                     # if he successfully remembered the current card for timespacing days at least
                     review_next_card = False
                     cards = self.noteCardsIds[card.nid]
-                    for cid in cards:
+                    sibling = self.getSibling(self.noteNotes.get(card.nid))
+                    # print(f"{datetime.now()} getting sibling card {card.id}, {sibling}...")
+                    if sibling:
+                        siblings = self.cardSiblingIds[sibling]
+                    else:
+                        siblings = cards
+                    for cid in siblings:
                         # blocks the actual card if it is detected a sibling scheduled in 7 days period.
                         # this fails if a card is scheduled today to be due in 13 days and
                         # after 7 days this is going skip any siblings of this card,
@@ -217,6 +239,8 @@ class Scheduler(SchedulerBaseWithLegacy):
                             if card.queue == QUEUE_TYPE_NEW \
                                     and self.cardNote[card.id] == self.cardNote[cid] \
                                     and cards.index(card.id) < cards.index(cid):
+                                print(f"{datetime.now()} Pushing new card {card.id}/{card.nid} '{card.template()['name']}' "
+                                        f"first even if it has a sibling card {cid} being studied in {timespacing} days period '{firstsource}'.")
                                 break
                             review_this_card = False
                             # should I really focus on this cid?
@@ -228,6 +252,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                                 # burying will bury the other siblings.
                                 # but do not break if it is detected to not be the one with highest priority scheduled for today!
                                 if inner_cid in self.cardDueReviewToday \
+                                        and self.cardNote[inner_cid] == self.cardNote[cid] \
                                         and cards.index(inner_cid) < cards.index(cid):
                                     if inner_cid == card.id:
                                         review_this_card = True
@@ -235,13 +260,16 @@ class Scheduler(SchedulerBaseWithLegacy):
                                         review_next_card = True
                                     break
                             if review_this_card or review_next_card:
+                                print(f"{datetime.now()} Skipping card {card.id}/{card.nid}/{int(review_this_card)}/{int(review_next_card)} "
+                                        f"'{card.template()['name']}' "
+                                        f"because it does has a sibling card {cid} being studied in {timespacing} days period '{firstsource}'.")
                                 break
                             self.notesBlocked.add(card.nid)
                             review_next_card = True
+                            print(f"{datetime.now()} Blocking card {card.id}/{card.nid} '{card.template()['name']}' "
+                                    f"because it does has a sibling card {cid} being studied in {timespacing} days period '{firstsource}'.")
                             break
                     if review_next_card:
-                        print(f"{datetime.now()} Skipping card {card.id}/{card.nid} '{card.template()['name']}' "
-                                f"because it does has a sibling card {cid} being studied in {timespacing} days period '{firstsource}'.")
                         self.bury_cards([card.id], manual=False)
                         if card.queue == QUEUE_TYPE_NEW:
                             self._reset_counts()
