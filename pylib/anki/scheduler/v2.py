@@ -146,6 +146,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                     self.noteNotes = {}
                     self.noteCardsIds = {}
                     self.noteTemplates = {}
+                    self.notesBlocked = set()
 
                     self.cardDueReviewToday = set()
                     self.cardDueReviewInNextDays = set()
@@ -188,6 +189,13 @@ class Scheduler(SchedulerBaseWithLegacy):
                             f"and due <= {self.today + timespacing} and due >= {self.today}"):
                         self.cardDueReviewInNextDays.add(cid)
 
+                if card.nid in self.notesBlocked:
+                    self.bury_cards([card.id], manual=False)
+                    if card.queue == QUEUE_TYPE_NEW:
+                        self._reset_counts()
+                        self._resetNew()
+                    continue
+
                 firstsource = self.getSource(self.noteNotes.get(card.nid))
                 # print(f"{datetime.now()} getting card {card.id}, {firstsource}...")
 
@@ -216,6 +224,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                                     if card.queue == QUEUE_TYPE_NEW:
                                         self._reset_counts()
                                         self._resetNew()
+                                    notesBlocked.add(card.nid)
                                     review_next_card = True
                                     break
                         if review_next_card:
