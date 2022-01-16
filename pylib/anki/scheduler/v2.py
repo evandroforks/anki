@@ -142,6 +142,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                     self.cardSourceIdsTime = self.today
                     self.cardSourceIds = {}
                     self.cardQueuesType = {}
+                    self.cardNote = {}
 
                     self.noteNotes = {}
                     self.noteCardsIds = {}
@@ -164,6 +165,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                             self.noteCardsIds[nid] = card_ids
                             self.noteTemplates[nid] = note.template()
                             for cid in card_ids:
+                                self.cardNote[cid] = nid
                                 queue_type = self.cardQueuesType[cid]
                                 if source in self.cardSourceIds:
                                     self.cardSourceIds[source].append((cid, queue_type))
@@ -235,17 +237,22 @@ class Scheduler(SchedulerBaseWithLegacy):
                     has_new_card_buried = False
 
                     if firstsource in self.cardSourceIds:
-                        # take another new card instead of bury review cards if a new card is coming,
                         # skip new card if it has a sibling waiting for review,
-                        # because reviewing already know content is more important than adding more things cluttering knowledge
+                        # because reviewing already know content is more important
+                        # than adding more things cluttering knowledge
                         if card.queue == QUEUE_TYPE_NEW:
                             review_next_card = False
-                            for cid, queue_type in self.cardSourceIds[firstsource]:
+                            cards = self.noteCardsIds[card.nid]
+                            for cid, _ in self.cardSourceIds[firstsource]:
                                 if cid != card.id:
                                     if cid in self.cardDueReviewToday:
+                                        # this happens when the templates sorting is changed, then, review by the new sorting first!
+                                        if self.cardNote[card.id] == self.cardNote[cid] \
+                                                and cards.index(card.id) < cards.index(cid):
+                                            break
                                         template = self.noteTemplates[card.nid]
                                         print(f"{datetime.now()} Skipping new card {card.id} '{template['name']}' "
-                                                f"by source because it has a sibling card pending review '{cid}, {firstsource}, '{queue_type}'.")
+                                                f"by source because it has a sibling card pending review '{cid}, {firstsource}.")
                                         self.bury_cards([card.id], manual=False)
                                         self._reset_counts()
                                         self._resetNew()
@@ -253,13 +260,13 @@ class Scheduler(SchedulerBaseWithLegacy):
                                         break
                             if review_next_card:
                                 continue
-                        else:
-                            for cid, queue_type in self.cardSourceIds[firstsource]:
-                                if cid != card.id:
-                                    print(f"{datetime.now()} Burring sibling card by source '{cid}, {firstsource}, '{queue_type}'.")
-                                    burySet.add(cid)
-                                    if queue_type == QUEUE_TYPE_NEW:
-                                        has_new_card_buried = True
+
+                        for cid, queue_type in self.cardSourceIds[firstsource]:
+                            if cid != card.id:
+                                print(f"{datetime.now()} Burring sibling card by source '{cid}, {firstsource}, '{queue_type}'.")
+                                burySet.add(cid)
+                                if queue_type == QUEUE_TYPE_NEW:
+                                    has_new_card_buried = True
 
                         if burySet:
                             self.bury_cards(burySet, manual=False)
