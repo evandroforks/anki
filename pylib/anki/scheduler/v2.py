@@ -151,7 +151,6 @@ class Scheduler(SchedulerBaseWithLegacy):
                     self.cardSourceIds = {}
                     self.cardSiblingIds = {}
                     self.cardQueuesType = {}
-                    self.cardNote = {}
 
                     self.noteNotes = {}
                     self.noteCardsIds = {}
@@ -164,7 +163,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                     for cid, queue in self.col.db.execute(f"select id, queue from cards"):
                         self.cardQueuesType[cid] = queue
 
-                    for nid, in self.col.db.execute(f"select id from notes"):
+                    for nid, in self.col.db.execute(f"select id from notes order by mid,id"):
                         note = self.col.getNote(nid)
                         source = self.getSource(note)
                         if source and len(source) > 0:
@@ -179,7 +178,6 @@ class Scheduler(SchedulerBaseWithLegacy):
                             self.noteNotes[nid] = note
                             self.noteCardsIds[nid] = card_ids
                             for cid in card_ids:
-                                self.cardNote[cid] = nid
                                 queue_type = self.cardQueuesType[cid]
                                 if source in self.cardSourceIds:
                                     self.cardSourceIds[source].append((cid, queue_type))
@@ -212,62 +210,66 @@ class Scheduler(SchedulerBaseWithLegacy):
                         self._resetNew()
                     continue
 
-                firstsource = self.getSource(self.noteNotes.get(card.nid))
-                # print(f"{datetime.now()} getting source card {card.id}, {firstsource}...")
+                source_field = self.getSource(self.noteNotes.get(card.nid))
+                # print(f"{datetime.now()} getting source card {card.id}, {source_field}...")
 
-                if self._burySiblingsOnAnswer and firstsource and len(firstsource) > 0:
+                # Only enable siblings burring if there is a source field set
+                if self._burySiblingsOnAnswer and source_field and len(source_field) > 0:
+                    review_next_card = False
+                    sibling_field = self.getSibling(self.noteNotes.get(card.nid))
+                    # print(f"{datetime.now()} getting sibling card {card.id}, {sibling_field}...")
+
+                    if sibling_field:
+                        siblings = self.cardSiblingIds[sibling_field]
+                    else:
+                        siblings = self.noteCardsIds[card.nid]
+                    card_index = siblings.index(card.id)
+
                     # only allow the user to see the next sibling card if timespacing days have passed since the last sibling
                     # this allows the user to focus in the current card and only see the next one,
                     # if he successfully remembered the current card for timespacing days at least
-                    review_next_card = False
-                    cards = self.noteCardsIds[card.nid]
-                    sibling = self.getSibling(self.noteNotes.get(card.nid))
-                    # print(f"{datetime.now()} getting sibling card {card.id}, {sibling}...")
-                    if sibling:
-                        siblings = self.cardSiblingIds[sibling]
-                    else:
-                        siblings = cards
-                    for cid in siblings:
+                    for cid_index, cid in enumerate(siblings):
                         # blocks the actual card if it is detected a sibling scheduled in 7 days period.
-                        # this fails if a card is scheduled today to be due in 13 days and
+                        # this fails if a card is scheduled today to be due in 13 days because
                         # after 7 days this is going skip any siblings of this card,
-                        # but it will not skip this card siblings after tomorrow up to 6 days.
+                        # but it will not skip this card siblings from tomorrow up to 6 days.
                         # as this is just a approximation of 7 days period to allow a card
                         # to be more focused before its siblings, this error should be acceptable.
                         if cid in self.cardDueReviewsInLastDays and cid in self.cardDueReviewInNextDays:
                             # this happens when the templates sorting is changed, then, review by the new sorting first!
                             if card.queue == QUEUE_TYPE_NEW \
-                                    and self.cardNote[card.id] == self.cardNote[cid] \
-                                    and cards.index(card.id) < cards.index(cid):
+                                    and card_index < cid_index:
                                 print(f"{datetime.now()} Pushing new card {card.id}/{card.nid} '{card.template()['name']}' "
-                                        f"first even if it has a sibling card {cid} being studied in {timespacing} days period '{firstsource}'.")
+                                        f"first even if it has a sibling card {cid} being studied in {timespacing} "
+                                        f"days period '{source_field}/{sibling_field}'.")
                                 break
                             review_this_card = False
                             # should I really focus on this cid?
                             # review the card.id if it is due today and it has more priority than cid!
-                            for inner_cid in cards:
+                            for inner_index, inner_cid in enumerate(siblings):
                                 # check if this is one of the first card reviewed and prioritise it!
                                 # break here if it detected that this card is the highest priority, this would allow
                                 # this card to be first reviewed and it will be the only one because the siblings source
                                 # burying will bury the other siblings.
                                 # but do not break if it is detected to not be the one with highest priority scheduled for today!
                                 if inner_cid in self.cardDueReviewToday \
-                                        and self.cardNote[inner_cid] == self.cardNote[cid] \
-                                        and cards.index(inner_cid) < cards.index(cid):
+                                        and inner_index < cid_index:
                                     if inner_cid == card.id:
                                         review_this_card = True
                                     else:
                                         review_next_card = True
                                     break
                             if review_this_card or review_next_card:
-                                print(f"{datetime.now()} Skipping card {card.id}/{card.nid}/{int(review_this_card)}/{int(review_next_card)} "
-                                        f"'{card.template()['name']}' "
-                                        f"because it does has a sibling card {cid} being studied in {timespacing} days period '{firstsource}'.")
+                                print(f"{datetime.now()} Skipping card {card.id}/{card.nid}/{int(review_this_card)}"
+                                        f"/{int(review_next_card)} '{card.template()['name']}' "
+                                        f"because it does has a sibling card {cid}/{inner_cid} being studied in {timespacing} "
+                                        f"days period '{source_field}/{sibling_field}'.")
                                 break
                             self.notesBlocked.add(card.nid)
                             review_next_card = True
                             print(f"{datetime.now()} Blocking card {card.id}/{card.nid} '{card.template()['name']}' "
-                                    f"because it does has a sibling card {cid} being studied in {timespacing} days period '{firstsource}'.")
+                                    f"because it does has a sibling card {cid} being studied in {timespacing} "
+                                    f"days period '{source_field}/{sibling_field}'.")
                             break
                     if review_next_card:
                         self.bury_cards([card.id], manual=False)
@@ -279,43 +281,45 @@ class Scheduler(SchedulerBaseWithLegacy):
                     # bury related sources
                     burySet = set()
                     has_new_card_buried = False
+                    sources = self.cardSourceIds[source_field]
 
-                    if firstsource in self.cardSourceIds:
-                        # skip new card if it has a sibling waiting for review,
-                        # because reviewing already know content is more important
-                        # than adding more things cluttering knowledge
-                        if card.queue == QUEUE_TYPE_NEW:
-                            review_next_card = False
-                            cards = self.noteCardsIds[card.nid]
-                            for cid, _ in self.cardSourceIds[firstsource]:
-                                if cid in self.cardDueReviewToday:
-                                    # this happens when the templates sorting is changed, then, review by the new sorting first!
-                                    if self.cardNote[card.id] == self.cardNote[cid] \
-                                            and cards.index(card.id) < cards.index(cid):
-                                        break
-                                    print(f"{datetime.now()} Skipping new card {card.id}/{card.nid} '{card.template()['name']}' "
-                                            f"by source because it has a sibling card pending review '{cid}, {firstsource}.")
-                                    self.bury_cards([card.id], manual=False)
-                                    self._reset_counts()
-                                    self._resetNew()
-                                    review_next_card = True
+                    # skip new card if it has a sibling waiting for review,
+                    # because reviewing already know content is more important
+                    # than adding more things cluttering knowledge
+                    if card.queue == QUEUE_TYPE_NEW:
+                        review_next_card = False
+                        card_index = sources.index((card.id, QUEUE_TYPE_NEW))
+
+                        for cid_index, (cid, _) in enumerate(sources):
+                            if cid in self.cardDueReviewToday:
+                                # this happens when the templates sorting is changed, then, review by the new sorting first!
+                                if card_index < cid_index:
                                     break
-                            if review_next_card:
-                                continue
+                                print(f"{datetime.now()} Skipping new card {card.id}/{card.nid} '{card.template()['name']}' "
+                                        f"by source because it has a sibling card "
+                                        f"pending review '{cid}, {source_field}/{sibling_field}.")
+                                self.bury_cards([card.id], manual=False)
+                                self._reset_counts()
+                                self._resetNew()
+                                review_next_card = True
+                                break
+                        if review_next_card:
+                            continue
 
-                        for cid, queue_type in self.cardSourceIds[firstsource]:
-                            if cid != card.id:
-                                burySet.add(cid)
-                                if queue_type == QUEUE_TYPE_NEW:
-                                    has_new_card_buried = True
+                    for cid, queue_type in sources:
+                        if cid != card.id:
+                            burySet.add(cid)
+                            if queue_type == QUEUE_TYPE_NEW:
+                                has_new_card_buried = True
 
-                        if burySet:
-                            print(f"{datetime.now()} Burring sibling card by source {firstsource}, {queue_type}, {burySet}.")
-                            self.bury_cards(burySet, manual=False)
+                    if burySet:
+                        print(f"{datetime.now()} Burring sibling card {card.id}/{card.nid} by source "
+                            f"{source_field}/{sibling_field}, {queue_type}, {burySet}.")
+                        self.bury_cards(burySet, manual=False)
 
-                        if has_new_card_buried:
-                            self._reset_counts()
-                            self._resetNew()
+                    if has_new_card_buried:
+                        self._reset_counts()
+                        self._resetNew()
                 break
         if card:
             if not self._burySiblingsOnAnswer:
