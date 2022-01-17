@@ -86,7 +86,6 @@ class Scheduler(SchedulerBaseWithLegacy):
             self.cardQueuesType = {}
 
             self.noteNotes = {}
-            self.noteCardsIds = {}
             self.notesBlocked = set()
 
             self.cardDueReviewToday = set()
@@ -99,17 +98,19 @@ class Scheduler(SchedulerBaseWithLegacy):
             for nid, in self.col.db.execute(f"select id from notes order by mid,id"):
                 note = self.col.getNote(nid)
                 source = self.getSource(note)
-                if source and len(source) > 0:
-                    card_ids = note.card_ids()
-                    sibling = self.getSibling(note)
-                    if sibling and len(sibling) > 0:
-                        if sibling in self.cardSiblingIds:
-                            self.cardSiblingIds[sibling].append(card_ids)
-                        else:
-                            self.cardSiblingIds[sibling] = [card_ids]
+                sibling = self.getSibling(note)
 
+                if source or sibling:
+                    card_ids = note.card_ids()
                     self.noteNotes[nid] = note
-                    self.noteCardsIds[nid] = card_ids
+
+                if sibling:
+                    if sibling in self.cardSiblingIds:
+                        self.cardSiblingIds[sibling].append(card_ids)
+                    else:
+                        self.cardSiblingIds[sibling] = [card_ids]
+
+                if source:
                     for cid in card_ids:
                         queue_type = self.cardQueuesType[cid]
                         if source in self.cardSourceIds:
@@ -232,19 +233,16 @@ class Scheduler(SchedulerBaseWithLegacy):
                         self._resetNew()
                     continue
 
-                source_field = self.getSource(self.noteNotes.get(card.nid))
-                # print(f"{datetime.now()} getting source card {card.id}, {source_field}...")
+                note = self.noteNotes.get(card.nid)
+                source_field = self.getSource(note)
+                sibling_field = self.getSibling(note)
+                # print(f"{datetime.now()} getting source card {card.id}, {source_field}/{sibling_field}...")
 
                 # Only enable siblings burring if there is a source field set
-                if self._burySiblingsOnAnswer and source_field and len(source_field) > 0:
+                if self._burySiblingsOnAnswer and sibling_field:
                     review_next_card = False
-                    sibling_field = self.getSibling(self.noteNotes.get(card.nid))
-                    # print(f"{datetime.now()} getting sibling card {card.id}, {sibling_field}...")
 
-                    if sibling_field:
-                        siblings = self.cardSiblingIds[sibling_field]
-                    else:
-                        siblings = self.noteCardsIds[card.nid]
+                    siblings = self.cardSiblingIds[sibling_field]
                     card_index = siblings.index(card.id)
 
                     # only allow the user to see the next sibling card if timespacing days have passed since the last sibling
@@ -292,11 +290,11 @@ class Scheduler(SchedulerBaseWithLegacy):
 
                             if review_this_card:
                                 print(f"{datetime.now()}     Review this card now from the sibling card because it has the highest priority "
-                                        f"{inner_index:2} < {cid_index:2}.")
+                                        f"{inner_index:2} < {cid_index:2}, {inner_cid}.")
                                 break
                             if review_next_card:
                                 print(f"{datetime.now()}     Skipping card because it does has a sibling card being studied today "
-                                        f"with highest priority {inner_index:2} <= {cid_index:2}.")
+                                        f"with highest priority {inner_index:2} <= {cid_index:2}, {inner_cid}.")
                                 break
                             self.notesBlocked.add(card.nid)
                             review_next_card = True
@@ -323,6 +321,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                             self._resetNew()
                         continue
 
+                if self._burySiblingsOnAnswer and source_field:
                     # bury related sources
                     burySet = set()
                     has_new_card_buried = False
