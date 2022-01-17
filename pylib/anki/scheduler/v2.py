@@ -157,8 +157,8 @@ class Scheduler(SchedulerBaseWithLegacy):
                     self.notesBlocked = set()
 
                     self.cardDueReviewToday = set()
-                    self.cardDueReviewInNextDays = set()
-                    self.cardDueReviewsInLastDays = set()
+                    self.cardDueReviewInNextDays = {}
+                    self.cardDueReviewsInLastDays = {}
 
                     for cid, queue in self.col.db.execute(f"select id, queue from cards"):
                         self.cardQueuesType[cid] = queue
@@ -188,20 +188,23 @@ class Scheduler(SchedulerBaseWithLegacy):
                     timedaysago = timenow - timedelta(days=timespacing)
                     timenowid = int(timenow.timestamp() * 1000)
                     timedaysagoid = int(timedaysago.timestamp() * 1000)
+                    creation_timestamp = datetime.fromtimestamp(self.col.db.scalar("select crt from col"))
 
                     for cid, in self.col.db.execute(f"select id from cards where "
                             f"queue in ({QUEUE_TYPE_LRN},{QUEUE_TYPE_REV},{QUEUE_TYPE_DAY_LEARN_RELEARN},{QUEUE_TYPE_PREVIEW}) "
                             f"and due <= {self.today}"):
                         self.cardDueReviewToday.add(cid)
 
-                    for cid, in self.col.db.execute(f"select cid from revlog where "
+                    for seconds, cid, in self.col.db.execute(f"select id, cid from revlog where "
                             f"id > {timedaysagoid} and id < {timenowid}"):
-                        self.cardDueReviewsInLastDays.add(cid)
+                        review_date = datetime.fromtimestamp(seconds/1000)
+                        delta = review_date - creation_timestamp
+                        self.cardDueReviewsInLastDays[cid] = delta.days
 
-                    for cid, in self.col.db.execute(f"select id from cards where "
+                    for cid, due in self.col.db.execute(f"select id, due from cards where "
                             f"queue in ({QUEUE_TYPE_LRN},{QUEUE_TYPE_REV},{QUEUE_TYPE_DAY_LEARN_RELEARN},{QUEUE_TYPE_PREVIEW}) "
                             f"and due <= {self.today + timespacing} and due >= {self.today}"):
-                        self.cardDueReviewInNextDays.add(cid)
+                        self.cardDueReviewInNextDays[cid] = due
 
                 if card.nid in self.notesBlocked:
                     self.bury_cards([card.id], manual=False)
@@ -230,18 +233,23 @@ class Scheduler(SchedulerBaseWithLegacy):
                     # if he successfully remembered the current card for timespacing days at least
                     for cid_index, cid in enumerate(siblings):
                         # blocks the actual card if it is detected a sibling scheduled in 7 days period.
-                        # this fails if a card is scheduled today to be due in 13 days because
-                        # after 7 days this is going skip any siblings of this card,
-                        # but it will not skip this card siblings from tomorrow up to 6 days.
-                        # as this is just a approximation of 7 days period to allow a card
-                        # to be more focused before its siblings, this error should be acceptable.
                         if cid in self.cardDueReviewsInLastDays and cid in self.cardDueReviewInNextDays:
+                            actual_period = self.cardDueReviewInNextDays[cid] - self.cardDueReviewsInLastDays[cid]
+
+                            print(f"{datetime.now()} Analyzing period {actual_period:2}/{int(abs(actual_period) > timespacing):2}, "
+                                    f"card {card.id}/{card.nid} for sibling {cid} in {timespacing} days: "
+                                    f"{card.template()['name']}, {source_field}/{sibling_field}.")
+
+                            # this would fail if a card is scheduled today to be due in 13 days because
+                            # after 7 days this is going skip any siblings of this card,
+                            # but it will not skip this card siblings from tomorrow up to 6 days.
+                            if abs(actual_period) > timespacing:
+                                continue
+
                             # this happens when the templates sorting is changed, then, review by the new sorting first!
                             if card.queue == QUEUE_TYPE_NEW \
                                     and card_index < cid_index:
-                                print(f"{datetime.now()} Pushing new card {card.id}/{card.nid} '{card.template()['name']}' "
-                                        f"first even if it has a sibling card {cid} being studied in {timespacing} "
-                                        f"days period '{source_field}/{sibling_field}'.")
+                                print(f"{datetime.now()}     Pushing new card first even if it has a sibling card being studied these days.")
                                 break
                             review_this_card = False
                             # should I really focus on this cid?
@@ -262,29 +270,25 @@ class Scheduler(SchedulerBaseWithLegacy):
                                 else:
                                     break
                             if review_this_card:
-                                print(f"{datetime.now()} Review this card {card.id}/{card.nid} '{card.template()['name']}' "
-                                        f"from the sibling card {cid} because it has the highest priority "
-                                        f"{inner_index} < {cid_index} '{source_field}/{sibling_field}'.")
+                                print(f"{datetime.now()}     Review this card now from the sibling card because it has the highest priority "
+                                        f"{inner_index:2} < {cid_index:2}.")
                                 break
                             if review_next_card:
-                                print(f"{datetime.now()} Skipping card {card.id}/{card.nid} '{card.template()['name']}' "
-                                        f"because it does has a sibling card {cid}/{inner_cid} being studied today "
-                                        f"with highest priority {inner_index} < {cid_index} '{source_field}/{sibling_field}'.")
+                                print(f"{datetime.now()}     Skipping card because it does has a sibling card being studied today "
+                                        f"with highest priority {inner_index:2} <= {cid_index:2}.")
                                 break
                             self.notesBlocked.add(card.nid)
                             review_next_card = True
-                            print(f"{datetime.now()} Blocking card {card.id}/{card.nid} '{card.template()['name']}' "
-                                    f"because it does has a sibling card {cid} being studied in {timespacing} "
-                                    f"days period '{source_field}/{sibling_field}'.")
+                            print(f"{datetime.now()}     Blocking card because it does has a sibling card being studied in these days.")
                             break
                     else:
                         # between concurrent siblings just today, check if there is a sibling with highest priority!
                         for cid_index, cid in enumerate(siblings):
                             if cid_index < card_index:
                                 if cid in self.cardDueReviewToday:
-                                    print(f"{datetime.now()} Skipping card {card.id}/{card.nid} '{card.template()['name']}' "
-                                            f"because it does has a sibling card {cid} being studied today "
-                                            f"with highest priority {cid_index} < {card_index} '{source_field}/{sibling_field}'.")
+                                    print(f"{datetime.now()} Skipping card {card.id}/{card.nid} because it does "
+                                            f"has a sibling card {cid} being studied today with highest priority "
+                                            f"{cid_index:2} < {card_index:2}, {card.template()['name']}, {source_field}/{sibling_field}.")
                                     review_next_card = True
                                     break
                             else:
@@ -313,9 +317,9 @@ class Scheduler(SchedulerBaseWithLegacy):
                                 # this happens when the templates sorting is changed, then, review by the new sorting first!
                                 if card_index < cid_index:
                                     break
-                                print(f"{datetime.now()} Skipping new card {card.id}/{card.nid} '{card.template()['name']}' "
-                                        f"by source because it has a sibling card "
-                                        f"pending review '{cid}, {source_field}/{sibling_field}.")
+                                print(f"{datetime.now()} Skipping new card {card.id}/{card.nid} "
+                                        f"by source because it has a sibling card pending review "
+                                        f"{cid}, {card.template()['name']}, {source_field}/{sibling_field}.")
                                 self.bury_cards([card.id], manual=False)
                                 self._reset_counts()
                                 self._resetNew()
@@ -331,8 +335,8 @@ class Scheduler(SchedulerBaseWithLegacy):
                                 has_new_card_buried = True
 
                     if burySet:
-                        print(f"{datetime.now()} Burring sibling card {card.id}/{card.nid} by source "
-                            f"{source_field}/{sibling_field}, {queue_type}, {burySet}.")
+                        print(f"{datetime.now()} Burying siblings from card {card.id}/{card.nid} by source "
+                            f"{queue_type:2}, {source_field}/{sibling_field}, {burySet}.")
                         self.bury_cards(burySet, manual=False)
 
                     if has_new_card_buried:
