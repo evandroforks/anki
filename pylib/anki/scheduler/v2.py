@@ -35,6 +35,7 @@ QueueConfig = Dict[str, Any]
 # positive revlog intervals are in days (rev), negative in seconds (lrn)
 # odue/odid store original due/did when cards moved to filtered deck
 from anki.utils import stripHTML
+from itertools import zip_longest
 
 
 class Scheduler(SchedulerBaseWithLegacy):
@@ -66,6 +67,16 @@ class Scheduler(SchedulerBaseWithLegacy):
         source = cls.tryGet("Sibling", note) or cls.tryGet("sibling", note)
         return stripHTML(source) if source else None
 
+    @staticmethod
+    def combineListAlternating(*iterators):
+        # https://stackoverflow.com/questions/3678869/pythonic-way-to-combine-two-lists-in-an-alternating-fashion
+        # merge("abc", "lmn1234", "xyz9", [None])
+        # ['a', 'l', 'x', None, 'b', 'm', 'y', 'c', 'n', 'z', '1', '9', '2', '3', '4']
+        return [
+            element for inner_list in zip_longest(*iterators, fillvalue=object)
+            for element in inner_list if element is not object
+        ]
+
     def rebuildSourcesCache(self, timespacing):
         # rebuilds the cache if Anki stayed open over night
         if not hasattr(self, "cardSourceIds") or self.cardSourceIdsTime < self.today:
@@ -93,9 +104,9 @@ class Scheduler(SchedulerBaseWithLegacy):
                     sibling = self.getSibling(note)
                     if sibling and len(sibling) > 0:
                         if sibling in self.cardSiblingIds:
-                            self.cardSiblingIds[sibling].extend(card_ids)
+                            self.cardSiblingIds[sibling].append(card_ids)
                         else:
-                            self.cardSiblingIds[sibling] = list(card_ids)
+                            self.cardSiblingIds[sibling] = [card_ids]
 
                     self.noteNotes[nid] = note
                     self.noteCardsIds[nid] = card_ids
@@ -105,6 +116,12 @@ class Scheduler(SchedulerBaseWithLegacy):
                             self.cardSourceIds[source].append((cid, queue_type))
                         else:
                             self.cardSourceIds[source] = [(cid, queue_type)]
+
+            # this would be a problem for note types with 15 or more cards each, then,
+            # intermix items from different note types to not put all cards from other notes at the bottom,
+            # this way a card of each note type is studied from each step instead of all from a single note.
+            for sibling, list_of_lists in self.cardSiblingIds.items():
+                self.cardSiblingIds[sibling] = self.combineListAlternating(*list_of_lists)
 
             timenow = datetime.now()
             timedaysago = timenow - timedelta(days=timespacing)
@@ -253,6 +270,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                                     and card_index < cid_index:
                                 print(f"{datetime.now()}     Pushing new card first even if it has a sibling card being studied these days.")
                                 break
+
                             review_this_card = False
                             # should I really focus on this cid?
                             # review the card.id if it is due today and it has more priority than cid!
@@ -271,6 +289,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                                         break
                                 else:
                                     break
+
                             if review_this_card:
                                 print(f"{datetime.now()}     Review this card now from the sibling card because it has the highest priority "
                                         f"{inner_index:2} < {cid_index:2}.")
@@ -283,6 +302,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                             review_next_card = True
                             print(f"{datetime.now()}     Blocking card because it does has a sibling card being studied in these days.")
                             break
+
                     else:
                         # between concurrent siblings just today, check if there is a sibling with highest priority!
                         for cid_index, cid in enumerate(siblings):
@@ -295,6 +315,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                                     break
                             else:
                                 break
+
                     if review_next_card:
                         self.bury_cards([card.id], manual=False)
                         if card.queue == QUEUE_TYPE_NEW:
