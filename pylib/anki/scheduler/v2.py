@@ -66,6 +66,68 @@ class Scheduler(SchedulerBaseWithLegacy):
         source = cls.tryGet("Sibling", note) or cls.tryGet("sibling", note)
         return stripHTML(source) if source else None
 
+    def rebuildSourcesCache(self, timespacing):
+        # rebuilds the cache if Anki stayed open over night
+        if not hasattr(self, "cardSourceIds") or self.cardSourceIdsTime < self.today:
+            self.cardSourceIdsTime = self.today
+            self.cardSourceIds = {}
+            self.cardSiblingIds = {}
+            self.cardQueuesType = {}
+
+            self.noteNotes = {}
+            self.noteCardsIds = {}
+            self.notesBlocked = set()
+
+            self.cardDueReviewToday = set()
+            self.cardDueReviewInNextDays = {}
+            self.cardDueReviewsInLastDays = {}
+
+            for cid, queue in self.col.db.execute(f"select id, queue from cards"):
+                self.cardQueuesType[cid] = queue
+
+            for nid, in self.col.db.execute(f"select id from notes order by mid,id"):
+                note = self.col.getNote(nid)
+                source = self.getSource(note)
+                if source and len(source) > 0:
+                    card_ids = note.card_ids()
+                    sibling = self.getSibling(note)
+                    if sibling and len(sibling) > 0:
+                        if sibling in self.cardSiblingIds:
+                            self.cardSiblingIds[sibling].extend(card_ids)
+                        else:
+                            self.cardSiblingIds[sibling] = list(card_ids)
+
+                    self.noteNotes[nid] = note
+                    self.noteCardsIds[nid] = card_ids
+                    for cid in card_ids:
+                        queue_type = self.cardQueuesType[cid]
+                        if source in self.cardSourceIds:
+                            self.cardSourceIds[source].append((cid, queue_type))
+                        else:
+                            self.cardSourceIds[source] = [(cid, queue_type)]
+
+            timenow = datetime.now()
+            timedaysago = timenow - timedelta(days=timespacing)
+            timenowid = int(timenow.timestamp() * 1000)
+            timedaysagoid = int(timedaysago.timestamp() * 1000)
+            creation_timestamp = datetime.fromtimestamp(self.col.db.scalar("select crt from col"))
+
+            for cid, in self.col.db.execute(f"select id from cards where "
+                    f"queue in ({QUEUE_TYPE_LRN},{QUEUE_TYPE_REV},{QUEUE_TYPE_DAY_LEARN_RELEARN},{QUEUE_TYPE_PREVIEW}) "
+                    f"and due <= {self.today}"):
+                self.cardDueReviewToday.add(cid)
+
+            for seconds, cid, in self.col.db.execute(f"select id, cid from revlog where "
+                    f"id > {timedaysagoid} and id < {timenowid}"):
+                review_date = datetime.fromtimestamp(seconds/1000)
+                delta = review_date - creation_timestamp
+                self.cardDueReviewsInLastDays[cid] = delta.days
+
+            for cid, due in self.col.db.execute(f"select id, due from cards where "
+                    f"queue in ({QUEUE_TYPE_LRN},{QUEUE_TYPE_REV},{QUEUE_TYPE_DAY_LEARN_RELEARN},{QUEUE_TYPE_PREVIEW}) "
+                    f"and due <= {self.today + timespacing} and due >= {self.today}"):
+                self.cardDueReviewInNextDays[cid] = due
+
     def __init__(self, col: anki.collection.Collection) -> None:
         super().__init__(col)
         self.queueLimit = 50
@@ -144,67 +206,7 @@ class Scheduler(SchedulerBaseWithLegacy):
             # https://anki.tenderapp.com/discussions/beta-testing/1850-cards-marked-as-buried-are-being-scheduled
             if card.queue > -1:
                 timespacing = 7
-
-                # rebuilds the cache if Anki stayed open over night
-                if not hasattr(self, "cardSourceIds") or self.cardSourceIdsTime < self.today:
-                    self.cardSourceIdsTime = self.today
-                    self.cardSourceIds = {}
-                    self.cardSiblingIds = {}
-                    self.cardQueuesType = {}
-
-                    self.noteNotes = {}
-                    self.noteCardsIds = {}
-                    self.notesBlocked = set()
-
-                    self.cardDueReviewToday = set()
-                    self.cardDueReviewInNextDays = {}
-                    self.cardDueReviewsInLastDays = {}
-
-                    for cid, queue in self.col.db.execute(f"select id, queue from cards"):
-                        self.cardQueuesType[cid] = queue
-
-                    for nid, in self.col.db.execute(f"select id from notes order by mid,id"):
-                        note = self.col.getNote(nid)
-                        source = self.getSource(note)
-                        if source and len(source) > 0:
-                            card_ids = note.card_ids()
-                            sibling = self.getSibling(note)
-                            if sibling and len(sibling) > 0:
-                                if sibling in self.cardSiblingIds:
-                                    self.cardSiblingIds[sibling].extend(card_ids)
-                                else:
-                                    self.cardSiblingIds[sibling] = list(card_ids)
-
-                            self.noteNotes[nid] = note
-                            self.noteCardsIds[nid] = card_ids
-                            for cid in card_ids:
-                                queue_type = self.cardQueuesType[cid]
-                                if source in self.cardSourceIds:
-                                    self.cardSourceIds[source].append((cid, queue_type))
-                                else:
-                                    self.cardSourceIds[source] = [(cid, queue_type)]
-
-                    timenow = datetime.now()
-                    timedaysago = timenow - timedelta(days=timespacing)
-                    timenowid = int(timenow.timestamp() * 1000)
-                    timedaysagoid = int(timedaysago.timestamp() * 1000)
-                    creation_timestamp = datetime.fromtimestamp(self.col.db.scalar("select crt from col"))
-
-                    for cid, in self.col.db.execute(f"select id from cards where "
-                            f"queue in ({QUEUE_TYPE_LRN},{QUEUE_TYPE_REV},{QUEUE_TYPE_DAY_LEARN_RELEARN},{QUEUE_TYPE_PREVIEW}) "
-                            f"and due <= {self.today}"):
-                        self.cardDueReviewToday.add(cid)
-
-                    for seconds, cid, in self.col.db.execute(f"select id, cid from revlog where "
-                            f"id > {timedaysagoid} and id < {timenowid}"):
-                        review_date = datetime.fromtimestamp(seconds/1000)
-                        delta = review_date - creation_timestamp
-                        self.cardDueReviewsInLastDays[cid] = delta.days
-
-                    for cid, due in self.col.db.execute(f"select id, due from cards where "
-                            f"queue in ({QUEUE_TYPE_LRN},{QUEUE_TYPE_REV},{QUEUE_TYPE_DAY_LEARN_RELEARN},{QUEUE_TYPE_PREVIEW}) "
-                            f"and due <= {self.today + timespacing} and due >= {self.today}"):
-                        self.cardDueReviewInNextDays[cid] = due
+                self.rebuildSourcesCache(timespacing)
 
                 if card.nid in self.notesBlocked:
                     self.bury_cards([card.id], manual=False)
