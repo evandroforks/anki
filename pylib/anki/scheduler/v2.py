@@ -86,7 +86,6 @@ class Scheduler(SchedulerBaseWithLegacy):
             self.cardQueuesType = {}
 
             self.noteNotes = {}
-            self.notesBlocked = set()
 
             self.cardDueReviewToday = set()
             self.cardDueReviewInNextDays = {}
@@ -226,13 +225,6 @@ class Scheduler(SchedulerBaseWithLegacy):
                 timespacing = 7
                 self.rebuildSourcesCache(timespacing)
 
-                if card.nid in self.notesBlocked:
-                    self.bury_cards([card.id], manual=False)
-                    if card.queue == QUEUE_TYPE_NEW:
-                        self._reset_counts()
-                        self._resetNew()
-                    continue
-
                 note = self.noteNotes.get(card.nid)
                 source_field = self.getSource(note)
                 sibling_field = self.getSibling(note)
@@ -241,15 +233,42 @@ class Scheduler(SchedulerBaseWithLegacy):
                 # Only enable siblings burring if there is a source field set
                 if self._burySiblingsOnAnswer and sibling_field:
                     review_next_card = False
-
                     siblings = self.cardSiblingIds[sibling_field]
                     card_index = siblings.index(card.id)
 
                     # only allow the user to see the next sibling card if timespacing days have passed since the last sibling
                     # this allows the user to focus in the current card and only see the next one,
-                    # if he successfully remembered the current card for timespacing days at least
+                    # if he successfully remembered the current card for timespacing days at least.
+                    # between concurrent siblings just today, check if there is a sibling with highest priority!
                     for cid_index, cid in enumerate(siblings):
+                        if card.id == cid:
+                            continue
+
+                        # should I really focus on this cid?
+                        # review the card.id if it is due today and it has more priority than cid!
+                        if cid_index < card_index:
+                            # check if this is one of the first card reviewed and prioritise it!
+                            # break here if it detected that this card is the highest priority, this would allow
+                            # this card to be first reviewed and it will be the only one because the siblings source
+                            # burying will bury the other siblings.
+                            # but do not break if it is detected to not be the one with highest priority scheduled for today!
+                            if cid in self.cardDueReviewToday:
+                                print(f"{datetime.now()}     Skipping card {card.id}/{card.nid} "
+                                        f"for the sibling {cid}, {cid_index:2} < {card_index:2}, "
+                                        f"{card.template()['name']}, {source_field}/{sibling_field}.")
+                                review_next_card = True
+                                break
+
+                        # this happens when the templates sorting is changed, then, review by the new sorting first!
+                        # if a card.queue is QUEUE_TYPE_NEW, it will never be inside self.cardDueReviewToday or self.cardDueReviewInNextDays!
+                        if card.queue == QUEUE_TYPE_NEW \
+                                and card_index < cid_index \
+                                and cid in self.cardDueReviewToday:
+                            print(f"{datetime.now()}     Pushing new card first even if it has a sibling being studied these days.")
+                            break
+
                         # blocks the actual card if it is detected a sibling scheduled in 7 days period.
+                        # notice: if a card is inside self.cardDueReviewInNextDays, it will never be inside self.cardDueReviewToday!
                         if cid in self.cardDueReviewsInLastDays and cid in self.cardDueReviewInNextDays:
                             actual_period = abs(self.cardDueReviewInNextDays[cid] - self.cardDueReviewsInLastDays[cid])
 
@@ -263,56 +282,9 @@ class Scheduler(SchedulerBaseWithLegacy):
                             if actual_period > timespacing:
                                 continue
 
-                            # this happens when the templates sorting is changed, then, review by the new sorting first!
-                            if card.queue == QUEUE_TYPE_NEW \
-                                    and card_index < cid_index:
-                                print(f"{datetime.now()}     Pushing new card first even if it has a sibling being studied these days.")
-                                break
-
-                            review_this_card = False
-                            # should I really focus on this cid?
-                            # review the card.id if it is due today and it has more priority than cid!
-                            for inner_index, inner_cid in enumerate(siblings):
-                                # check if this is one of the first card reviewed and prioritise it!
-                                # break here if it detected that this card is the highest priority, this would allow
-                                # this card to be first reviewed and it will be the only one because the siblings source
-                                # burying will bury the other siblings.
-                                # but do not break if it is detected to not be the one with highest priority scheduled for today!
-                                if inner_index <= cid_index:
-                                    if inner_cid in self.cardDueReviewToday:
-                                        if card.id == inner_cid:
-                                            review_this_card = True
-                                            break
-                                        review_next_card = True
-                                        break
-                                else:
-                                    break
-
-                            if review_this_card:
-                                print(f"{datetime.now()}     Review this card now for the sibling {inner_cid}, "
-                                        f"{inner_index:2} < {cid_index:2}.")
-                                break
-                            if review_next_card:
-                                print(f"{datetime.now()}     Skipping card for the sibling {inner_cid} "
-                                        f"with highest priority {inner_index:2} <= {cid_index:2}.")
-                                break
-                            self.notesBlocked.add(card.nid)
                             review_next_card = True
-                            print(f"{datetime.now()}     Blocking card because it does has a sibling being studied in these days.")
+                            print(f"{datetime.now()}     Skipping card because it does has a sibling being studied in these days.")
                             break
-
-                    else:
-                        # between concurrent siblings just today, check if there is a sibling with highest priority!
-                        for cid_index, cid in enumerate(siblings):
-                            if cid_index < card_index:
-                                if cid in self.cardDueReviewToday:
-                                    print(f"{datetime.now()} Skipping card {card.id}/{card.nid} "
-                                            f"for the sibling {cid}, {cid_index:2} < {card_index:2}, "
-                                            f"{card.template()['name']}, {source_field}/{sibling_field}.")
-                                    review_next_card = True
-                                    break
-                            else:
-                                break
 
                     if review_next_card:
                         self.bury_cards([card.id], manual=False)
@@ -335,18 +307,21 @@ class Scheduler(SchedulerBaseWithLegacy):
                         card_index = sources.index((card.id, QUEUE_TYPE_NEW))
 
                         for cid_index, (cid, _) in enumerate(sources):
-                            if cid in self.cardDueReviewToday:
-                                # this happens when the templates sorting is changed, then, review by the new sorting first!
-                                if card_index < cid_index:
+                            # this happens when the templates sorting is changed, then, review by the new sorting first!
+                            if cid_index < card_index:
+                                # if a card.queue is QUEUE_TYPE_NEW, it will never be inside self.cardDueReviewToday!
+                                if cid in self.cardDueReviewToday:
+                                    print(f"{datetime.now()} Skipping new card {card.id}/{card.nid} "
+                                            f"by source for the sibling pending review "
+                                            f"{cid}, {card.template()['name']}, {source_field}/{sibling_field}.")
+                                    self.bury_cards([card.id], manual=False)
+                                    self._reset_counts()
+                                    self._resetNew()
+                                    review_next_card = True
                                     break
-                                print(f"{datetime.now()} Skipping new card {card.id}/{card.nid} "
-                                        f"by source for the sibling pending review "
-                                        f"{cid}, {card.template()['name']}, {source_field}/{sibling_field}.")
-                                self.bury_cards([card.id], manual=False)
-                                self._reset_counts()
-                                self._resetNew()
-                                review_next_card = True
+                            else:
                                 break
+
                         if review_next_card:
                             continue
 
