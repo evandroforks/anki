@@ -268,7 +268,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                             break
 
                         # blocks the actual card if it is detected a sibling scheduled in 7 days period.
-                        # notice: if a card is inside self.cardDueReviewInNextDays, it will never be inside self.cardDueReviewToday!
+                        # notice: if a card is inside self.cardDueReviewInNextDays, it may be inside self.cardDueReviewToday!
                         if cid in self.cardDueReviewsInLastDays and cid in self.cardDueReviewInNextDays:
                             actual_period = abs(self.cardDueReviewInNextDays[cid] - self.cardDueReviewsInLastDays[cid])
 
