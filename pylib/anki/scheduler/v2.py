@@ -80,6 +80,7 @@ class Scheduler(SchedulerBaseWithLegacy):
     def rebuildSourcesCache(self, timespacing):
         # rebuilds the cache if Anki stayed open over night
         if not hasattr(self, "cardSourceIds") or self.cardSourceIdsTime < self.today:
+            self.skipEmptyCards = False
             self.cardSourceIdsTime = self.today
             self.cardSourceIds = {}
             self.cardSiblingIds = {}
@@ -224,6 +225,12 @@ class Scheduler(SchedulerBaseWithLegacy):
             if card.queue > -1:
                 timespacing = 7
                 self.rebuildSourcesCache(timespacing)
+
+                if self.skipEmptyCards:
+                    if self.col.tr.card_template_rendering_empty_front() in card.question():
+                        self.bury_cards([card.id], manual=False)
+                        print(f"{datetime.now()}     Skipping card {card.id}/{card.nid} with empty front.")
+                        continue
 
                 note = self.noteNotes.get(card.nid)
                 source_field = self.getSource(note)
