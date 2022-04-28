@@ -229,7 +229,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                 if self.skipEmptyCards:
                     if self.col.tr.card_template_rendering_empty_front() in card.question():
                         self.bury_cards([card.id], manual=False)
-                        print(f"{datetime.now()}     Skipping card {card.id}/{card.nid} with empty front.")
+                        # print(f"{datetime.now()}     Skipping card {card.id}/{card.nid} with empty front.")
                         continue
 
                 note = self.noteNotes.get(card.nid)
@@ -260,9 +260,9 @@ class Scheduler(SchedulerBaseWithLegacy):
                             # burying will bury the other siblings.
                             # but do not break if it is detected to not be the one with highest priority scheduled for today!
                             if cid in self.cardDueReviewToday:
-                                print(f"{datetime.now()}     Skipping card {card.id}/{card.nid} "
-                                        f"for the sibling {cid}, {cid_index:2} < {card_index:2}, "
-                                        f"{card.template()['name']}, {source_field}/{sibling_field}.")
+                                # print(f"{datetime.now()}     Skipping card {card.id}/{card.nid} "
+                                #         f"for the sibling {cid}, {cid_index:2} < {card_index:2}, "
+                                #         f"{card.template()['name']}, {source_field}/{sibling_field}.")
                                 review_next_card = True
                                 break
 
@@ -271,7 +271,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                         if card.queue == QUEUE_TYPE_NEW \
                                 and card_index < cid_index \
                                 and cid in self.cardDueReviewToday:
-                            print(f"{datetime.now()}     Pushing new card first even if it has a sibling being studied these days.")
+                            # print(f"{datetime.now()}     Pushing new card first even if it has a sibling being studied these days.")
                             break
 
                         # blocks the actual card if it is detected a sibling scheduled in 7 days period.
@@ -279,9 +279,9 @@ class Scheduler(SchedulerBaseWithLegacy):
                         if cid in self.cardDueReviewsInLastDays and cid in self.cardDueReviewInNextDays:
                             actual_period = abs(self.cardDueReviewInNextDays[cid] - self.cardDueReviewsInLastDays[cid])
 
-                            print(f"{datetime.now()} Analyzing {actual_period:2}/{int(actual_period > timespacing):2}, "
-                                    f"card {card.id}/{card.nid} for sibling {cid} in {timespacing} days: "
-                                    f"{card.template()['name']}, {source_field}/{sibling_field}.")
+                            # print(f"{datetime.now()} Analyzing {actual_period:2}/{int(actual_period > timespacing):2}, "
+                            #         f"card {card.id}/{card.nid} for sibling {cid} in {timespacing} days: "
+                            #         f"{card.template()['name']}, {source_field}/{sibling_field}.")
 
                             # this would fail if a card is scheduled today to be due in 13 days because
                             # after 7 days this is going skip any siblings of this card,
@@ -290,7 +290,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                                 continue
 
                             review_next_card = True
-                            print(f"{datetime.now()}     Skipping card because it does has a sibling being studied in these days.")
+                            # print(f"{datetime.now()}     Skipping card because it does has a sibling being studied in these days.")
                             break
 
                     if review_next_card:
@@ -318,9 +318,9 @@ class Scheduler(SchedulerBaseWithLegacy):
                             if cid_index < card_index:
                                 # if a card.queue is QUEUE_TYPE_NEW, it will never be inside self.cardDueReviewToday!
                                 if cid in self.cardDueReviewToday:
-                                    print(f"{datetime.now()} Skipping new card {card.id}/{card.nid} "
-                                            f"by source for the sibling pending review "
-                                            f"{cid}, {card.template()['name']}, {source_field}/{sibling_field}.")
+                                    # print(f"{datetime.now()} Skipping new card {card.id}/{card.nid} "
+                                    #         f"by source for the sibling pending review "
+                                    #         f"{cid}, {card.template()['name']}, {source_field}/{sibling_field}.")
                                     self.bury_cards([card.id], manual=False)
                                     self._reset_counts()
                                     self._resetNew()
@@ -339,8 +339,8 @@ class Scheduler(SchedulerBaseWithLegacy):
                                 has_new_card_buried = True
 
                     if burySet:
-                        print(f"{datetime.now()} Burying siblings from card {card.id}/{card.nid} by source "
-                            f"{queue_type:2}, {source_field}/{sibling_field}, {burySet}.")
+                        # print(f"{datetime.now()} Burying siblings from card {card.id}/{card.nid} by source "
+                        #     f"{queue_type:2}, {source_field}/{sibling_field}, {burySet}.")
                         self.bury_cards(burySet, manual=False)
 
                     if has_new_card_buried:
