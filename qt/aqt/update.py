@@ -57,6 +57,7 @@ class LatestVersionFinder(QThread):
 
 
 def askAndUpdate(mw: aqt.AnkiQt, ver: str) -> None:
+    return
     baseStr = tr.qt_misc_anki_updatedanki_has_been_released(val=ver)
     msg = QMessageBox(mw)
     msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)  # type: ignore
