@@ -977,11 +977,11 @@ time = %(time)d;
 
     def on_previous_card_info(self) -> None:
         if self.previous_card:
-            CardInfoDialog(parent=self.mw, mw=self.mw, card=self.previous_card)
+            CardInfoDialog(parent=self.mw, mw=self.mw, card=self.previous_card, title=tr.actions_previous_card_info())
 
     def on_card_info(self) -> None:
         if self.card:
-            CardInfoDialog(parent=self.mw, mw=self.mw, card=self.card)
+            CardInfoDialog(parent=self.mw, mw=self.mw, card=self.card, title=tr.actions_card_info())
 
     def set_flag_on_current_card(self, desired_flag: int) -> None:
         def redraw_flag(out: OpChangesWithCount) -> None:

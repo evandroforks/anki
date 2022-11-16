@@ -14,7 +14,7 @@ from aqt.webview import AnkiWebView
 class CardInfoDialog(QDialog):
     silentlyClose = True
 
-    def __init__(self, parent: QWidget, mw: aqt.AnkiQt, card: Card) -> None:
+    def __init__(self, parent: QWidget, mw: aqt.AnkiQt, card: Card, title: str = "") -> None:
         super().__init__(parent)
         disable_help_button(self)
         cs = CardStats(mw.col, card)
@@ -31,6 +31,8 @@ class CardInfoDialog(QDialog):
         self.setLayout(l)
         self.setWindowModality(Qt.WindowModal)
         self.resize(500, 400)
+        if title:
+            self.setWindowTitle(title)
         restoreGeom(self, "revlog")
         self.show()
 
