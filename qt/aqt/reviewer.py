@@ -472,13 +472,14 @@ class Reviewer:
             ("2", lambda: self._answerCard(2)),
             ("3", lambda: self._answerCard(3)),
             ("4", lambda: self._answerCard(4)),
-            ("5", self.on_pause_audio),
-            ("6", self.on_seek_backward),
-            ("7", self.on_seek_forward),
+            ("F4", self.on_pause_audio),
+            ("F6", self.on_seek_backward),
+            ("F7", self.on_seek_forward),
         ]
 
     def on_pause_audio(self) -> None:
         av_player.toggle_pause()
+        self.web.eval("ankimedia.togglePause();")
 
     seek_secs = 5
 
@@ -929,9 +930,9 @@ time = %(time)d;
             [tr.studying_delete_note(), "Ctrl+Delete", self.delete_current_note],
             None,
             [tr.actions_replay_audio(), "R", self.replayAudio],
-            [tr.studying_pause_audio(), "5", self.on_pause_audio],
-            [tr.studying_audio_5s(), "6", self.on_seek_backward],
-            [tr.studying_audio_and5s(), "7", self.on_seek_forward],
+            [tr.studying_pause_audio(), "F4", self.on_pause_audio],
+            [tr.studying_audio_5s(), "F6", self.on_seek_backward],
+            [tr.studying_audio_and5s(), "F7", self.on_seek_forward],
             [tr.studying_record_own_voice(), "Shift+V", self.onRecordVoice],
             [tr.studying_replay_own_voice(), "V", self.onReplayRecorded],
         ]
