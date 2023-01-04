@@ -12,7 +12,7 @@ use nom::{
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
 };
 
-use super::{CardNodes, Directive, Node, OtherDirective, TtsDirective, MediaDirective};
+use super::{CardNodes, Directive, Node, OtherDirective, TtsDirective};
 
 type IResult<'a, O> = nom::IResult<&'a str, O>;
 
@@ -57,12 +57,6 @@ impl<'a> Directive<'a> {
                     speed,
                     blank,
                     options: other_options,
-                })
-            }
-            "media" => {
-                let filepath = content;
-                Self::Media(MediaDirective {
-                    filepath,
                 })
             }
             _ => Self::Other(OtherDirective {
@@ -260,14 +254,6 @@ mod test {
                 speed: 1.0,
                 blank: None,
                 options: HashMap::new(),
-            }))
-        );
-
-        // new media tags
-        assert_parsed_nodes!(
-            "[anki:media]file.mp3[/anki:media]",
-            Directive(super::Directive::Media(MediaDirective {
-                filepath: "file.mp3",
             }))
         );
     }

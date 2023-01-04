@@ -3,7 +3,7 @@
 
 use std::fmt::Write as _;
 
-use super::{CardNodes, Directive, Node, OtherDirective, TtsDirective, MediaDirective};
+use super::{CardNodes, Directive, Node, OtherDirective, TtsDirective};
 use crate::{
     pb,
     prelude::*,
@@ -56,7 +56,6 @@ trait Write {
     fn write_directive(&mut self, buf: &mut String, directive: &Directive) {
         match directive {
             Directive::Tts(directive) => self.write_tts_directive(buf, directive),
-            Directive::Media(directive) => self.write_media_directive(buf, directive),
             Directive::Other(directive) => self.write_other_directive(buf, directive),
         };
     }
@@ -89,10 +88,6 @@ trait Write {
         buf.push(']');
         self.write_directive_content(buf, directive.content);
         write!(buf, "[/anki:{}]", directive.name).unwrap();
-    }
-
-    fn write_media_directive(&mut self, buf: &mut String, directive: &MediaDirective) {
-        write!(buf, "[anki:media]{}[/anki:media]", directive.filepath).unwrap();
     }
 
     fn write_directive_option(&mut self, buf: &mut String, key: &str, val: &str) {
@@ -243,7 +238,6 @@ mod test {
         roundtrip!("foo");
         roundtrip!("[sound:foo]");
         roundtrip!("[anki:foo bar=baz]spam[/anki:foo]");
-        roundtrip!("[anki:media]spam.mp3[/anki:media]");
 
         // normalizing (not currently exposed)
         roundtrip!(

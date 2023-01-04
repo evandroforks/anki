@@ -62,7 +62,6 @@ enum Node<'a> {
 #[derive(Debug, PartialEq)]
 enum Directive<'a> {
     Tts(TtsDirective<'a>),
-    Media(MediaDirective<'a>),
     Other(OtherDirective<'a>),
 }
 
@@ -74,11 +73,6 @@ struct TtsDirective<'a> {
     speed: f32,
     blank: Option<&'a str>,
     options: HashMap<&'a str, &'a str>,
-}
-
-#[derive(Debug, PartialEq)]
-struct MediaDirective<'a> {
-    filepath: &'a str,
 }
 
 #[derive(Debug, PartialEq, Eq)]
