@@ -12,7 +12,7 @@ use nom::{
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
 };
 
-use super::{CardNodes, Directive, Node, OtherDirective, TtsDirective};
+use super::{CardNodes, Directive, Node, OtherDirective, TtsDirective, MediaDirective};
 
 type IResult<'a, O> = nom::IResult<&'a str, O>;
 
@@ -59,6 +59,12 @@ impl<'a> Directive<'a> {
                     options: other_options,
                 })
             }
+            "media" => {
+                let filepath = content;
+                Self::Media(MediaDirective {
+                    filepath,
+                })
+            }
             _ => Self::Other(OtherDirective {
                 name,
                 content,
@@ -84,7 +90,7 @@ fn is_not0<'parser, 'arr: 'parser, 's: 'parser>(
 }
 
 fn node(s: &str) -> IResult<Node> {
-    alt((text_node, sound_node, tag_node, sound_node_extended))(s)
+    alt((text_node, sound_node, tag_node))(s)
 }
 
 /// A sound tag `[sound:resource]`, where `resource` is pointing to a sound or video file.
@@ -92,34 +98,6 @@ fn sound_node(s: &str) -> IResult<Node> {
     map(
         delimited(tag("[sound:"), is_not("]"), tag("]")),
         Node::SoundOrVideo,
-    )(s)
-}
-
-/// A sound tag `[sound:filename=resource]`, where `resource` is pointing to a sound or video file.
-fn sound_node_extended(s: &str) -> IResult<Node> {
-    /// List of whitespace-separated `key=val` tuples, where `val` may be empty.
-    fn options(s: &str) -> IResult<Vec<(&str, &str)>> {
-        fn key(s: &str) -> IResult<&str> {
-            is_not("] \t\r\n=")(s)
-        }
-
-        fn val(s: &str) -> IResult<&str> {
-            alt((
-                delimited(tag("\""), is_not0("\""), tag("\"")),
-                is_not0("] \t\r\n\""),
-            ))(s)
-        }
-
-        many0(trailing_whitespace0(separated_pair(key, tag("="), val)))(s)
-    }
-
-    map(
-        delimited(
-            tag("[sound:"),
-            options,
-            tag("]"),
-        ),
-        |options| Node::SoundOrVideo(match options.first() { Some(value) => value.1, None => "error" }),
     )(s)
 }
 
@@ -282,6 +260,14 @@ mod test {
                 speed: 1.0,
                 blank: None,
                 options: HashMap::new(),
+            }))
+        );
+
+        // new media tags
+        assert_parsed_nodes!(
+            "[anki:media]file.mp3[/anki:media]",
+            Directive(super::Directive::Media(MediaDirective {
+                filepath: "file.mp3",
             }))
         );
     }

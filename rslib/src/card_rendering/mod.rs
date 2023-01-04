@@ -56,20 +56,13 @@ impl<'iter, 'nodes> IntoIterator for &'iter CardNodes<'nodes> {
 enum Node<'a> {
     Text(&'a str),
     SoundOrVideo(&'a str),
-    // SoundOrVideo(&'a str, Vec<(&'a str, &'a str)>),
-    // SoundOrVideo(SoundOrVideo<'a>),
     Directive(Directive<'a>),
 }
-
-// #[derive(Debug, PartialEq)]
-// struct SoundOrVideo<'a> {
-//     filenoly: bool,
-//     filename: &'a str,
-// }
 
 #[derive(Debug, PartialEq)]
 enum Directive<'a> {
     Tts(TtsDirective<'a>),
+    Media(MediaDirective<'a>),
     Other(OtherDirective<'a>),
 }
 
@@ -81,6 +74,11 @@ struct TtsDirective<'a> {
     speed: f32,
     blank: Option<&'a str>,
     options: HashMap<&'a str, &'a str>,
+}
+
+#[derive(Debug, PartialEq)]
+struct MediaDirective<'a> {
+    filepath: &'a str,
 }
 
 #[derive(Debug, PartialEq, Eq)]
