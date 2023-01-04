@@ -124,13 +124,11 @@ lazy_static! {
     // videos are also in sound tags
     static ref AV_TAGS: Regex = Regex::new(
         r#"(?xs)
-            \[sound:(?P<soundname>[^\]|]*)
-                (?:\|(?P<soundargs>[^\]]*))?
-            \]
+            \[sound:(.+?)\]     # 1 - the filename in a sound tag
             |
             \[anki:tts\]
-                \[(?P<ttsargs>.*?)\]
-                (?P<ttstext>.*?)
+                \[(.*?)\]       # 2 - arguments to tts call
+                (.*?)           # 3 - field text
             \[/anki:tts\]
             "#).unwrap();
 
@@ -260,7 +258,7 @@ pub(crate) fn extract_media_refs(text: &str) -> Vec<MediaRef> {
     }
 
     for caps in AV_TAGS.captures_iter(text) {
-        if let Some(m) = caps.name("soundname") {
+        if let Some(m) = caps.get(1) {
             let fname = m.as_str();
             let fname_decoded = decode_entities(fname);
             out.push(MediaRef {
