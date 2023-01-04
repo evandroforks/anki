@@ -56,8 +56,16 @@ impl<'iter, 'nodes> IntoIterator for &'iter CardNodes<'nodes> {
 enum Node<'a> {
     Text(&'a str),
     SoundOrVideo(&'a str),
+    // SoundOrVideo(&'a str, Vec<(&'a str, &'a str)>),
+    // SoundOrVideo(SoundOrVideo<'a>),
     Directive(Directive<'a>),
 }
+
+// #[derive(Debug, PartialEq)]
+// struct SoundOrVideo<'a> {
+//     filenoly: bool,
+//     filename: &'a str,
+// }
 
 #[derive(Debug, PartialEq)]
 enum Directive<'a> {
