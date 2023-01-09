@@ -1339,7 +1339,7 @@ class EditorWebView(AnkiWebView):
                     # if there's more than one consecutive space,
                     # use non-breaking spaces for the second one on
                     def repl(match: Match) -> str:
-                        return f"{match.group(1).replace(' ', '&nbsp;')} "
+                        return f"{match.group(1).replace(' ', ' ')} "
 
                     token = re.sub(" ( +)", repl, token)
                     processed.append(token)
