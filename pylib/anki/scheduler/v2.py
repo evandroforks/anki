@@ -98,7 +98,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                 self.cardQueuesType[cid] = queue
 
             for nid, in self.col.db.execute(f"select id from notes order by mid,id"):
-                note = self.col.getNote(nid)
+                note = self.col.get_note(nid)
                 source = self.getSource(note)
                 sibling = self.getSibling(note)
 
