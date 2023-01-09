@@ -138,7 +138,7 @@ class Previewer(QDialog):
             js=[
                 "js/mathjax.js",
                 "js/vendor/mathjax/tex-chtml.js",
-                "js/ankimedia.js",
+                "js/vendor/ankimedia.js",
                 "js/reviewer.js",
             ],
             context=self,
@@ -236,8 +236,9 @@ class Previewer(QDialog):
                     audio = c.answer_av_tags()
             else:
                 audio = []
-                self._web.eval("ankimedia.autoplay = false;")
                 self._web.setPlaybackRequiresGesture(True)
+                self._web.eval("ankimedia.autoplay = false;")
+
             gui_hooks.av_player_will_play_tags(audio, self._state, self)
             av_player.play_tags(audio)
             txt = self.mw.prepare_card_text_for_display(txt)

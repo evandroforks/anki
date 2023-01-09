@@ -6,7 +6,9 @@
 from __future__ import annotations
 
 import random
+import functools
 import time
+from datetime import datetime, timedelta
 from heapq import *
 from typing import Any, Callable, cast
 
@@ -34,6 +36,8 @@ QueueConfig = dict[str, Any]
 # revlog types: 0=lrn, 1=rev, 2=relrn, 3=early review
 # positive revlog intervals are in days (rev), negative in seconds (lrn)
 # odue/odid store original due/did when cards moved to filtered deck
+from anki.utils import stripHTML
+from itertools import zip_longest
 
 
 class Scheduler(SchedulerBaseWithLegacy):
@@ -42,6 +46,107 @@ class Scheduler(SchedulerBaseWithLegacy):
     haveCustomStudy = True
     _burySiblingsOnAnswer = True
     revCount: int
+
+    @staticmethod
+    def tryGet(field, note):
+        if field in note:
+            return note[field]
+        return None
+
+    @classmethod
+    def getSource(cls, note):
+        if note is None:
+            return None
+
+        source = cls.tryGet("Source", note) or cls.tryGet("source", note)
+        return stripHTML(source) if source else None
+
+    @classmethod
+    def getSibling(cls, note):
+        if note is None:
+            return None
+
+        source = cls.tryGet("Sibling", note) or cls.tryGet("sibling", note)
+        return stripHTML(source) if source else None
+
+    @staticmethod
+    def combineListAlternating(*iterators):
+        # https://stackoverflow.com/questions/3678869/pythonic-way-to-combine-two-lists-in-an-alternating-fashion
+        # merge("abc", "lmn1234", "xyz9", [None])
+        # ['a', 'l', 'x', None, 'b', 'm', 'y', 'c', 'n', 'z', '1', '9', '2', '3', '4']
+        return [
+            element for inner_list in zip_longest(*iterators, fillvalue=object)
+            for element in inner_list if element is not object
+        ]
+
+    def rebuildSourcesCache(self, timespacing):
+        # rebuilds the cache if Anki stayed open over night
+        if not hasattr(self, "cardSourceIds") or self.cardSourceIdsTime < self.today:
+            self.skipEmptyCards = False
+            self.cardSourceIdsTime = self.today
+            self.cardSourceIds = {}
+            self.cardSiblingIds = {}
+            self.cardQueuesType = {}
+
+            self.noteNotes = {}
+
+            self.cardDueReviewToday = set()
+            self.cardDueReviewInNextDays = {}
+            self.cardDueReviewsInLastDays = {}
+
+            for cid, queue in self.col.db.execute(f"select id, queue from cards"):
+                self.cardQueuesType[cid] = queue
+
+            for nid, in self.col.db.execute(f"select id from notes order by mid,id"):
+                note = self.col.getNote(nid)
+                source = self.getSource(note)
+                sibling = self.getSibling(note)
+
+                if source or sibling:
+                    card_ids = note.card_ids()
+                    self.noteNotes[nid] = note
+
+                if sibling:
+                    if sibling in self.cardSiblingIds:
+                        self.cardSiblingIds[sibling].append(card_ids)
+                    else:
+                        self.cardSiblingIds[sibling] = [card_ids]
+
+                if source:
+                    for cid in card_ids:
+                        queue_type = self.cardQueuesType[cid]
+                        if source in self.cardSourceIds:
+                            self.cardSourceIds[source].append((cid, queue_type))
+                        else:
+                            self.cardSourceIds[source] = [(cid, queue_type)]
+
+            # this would be a problem for note types with 15 or more cards each, then,
+            # intermix items from different note types to not put all cards from other notes at the bottom,
+            # this way a card of each note type is studied from each step instead of all from a single note.
+            for sibling, list_of_lists in self.cardSiblingIds.items():
+                self.cardSiblingIds[sibling] = self.combineListAlternating(*list_of_lists)
+
+            timenow = datetime.now()
+            timedaysago = timenow - timedelta(days=timespacing)
+            timenowid = int(timenow.timestamp() * 1000)
+            timedaysagoid = int(timedaysago.timestamp() * 1000)
+            creation_timestamp = datetime.fromtimestamp(self.col.db.scalar("select crt from col"))
+
+            for cid, in self.col.db.execute(f"select id from cards where "
+                    f"queue in ({QUEUE_TYPE_LRN},{QUEUE_TYPE_REV},{QUEUE_TYPE_DAY_LEARN_RELEARN},{QUEUE_TYPE_PREVIEW}) "
+                    f"and due <= {self.today}"):
+                self.cardDueReviewToday.add(cid)
+
+            for seconds, cid, in self.col.db.execute(f"select id, cid from revlog where "
+                    f"id > {timedaysagoid} and id < {timenowid}"):
+                review_date = datetime.fromtimestamp(seconds/1000)
+                delta = review_date - creation_timestamp
+                self.cardDueReviewsInLastDays[cid] = delta.days
+
+            for cid, due in self.col.db.execute(f"select id, due from cards where "
+                    f"queue in ({QUEUE_TYPE_LRN},{QUEUE_TYPE_REV},{QUEUE_TYPE_DAY_LEARN_RELEARN},{QUEUE_TYPE_PREVIEW}) "
+                    f"and due <= {self.today + timespacing} and due >= {self.today}"):
+                self.cardDueReviewInNextDays[cid] = due
 
     def __init__(self, col: anki.collection.Collection) -> None:
         super().__init__(col)
@@ -85,8 +190,19 @@ class Scheduler(SchedulerBaseWithLegacy):
         self._resetNew()
         self._haveQueues = True
 
+    @functools.lru_cache(maxsize=1)
+    def cached_deck_due_tree(self, deck_id: DeckId, cache_life: int = 0):
+        del cache_life  # shut pylint up
+        return self.deck_due_tree(deck_id)
+
+    @staticmethod
+    def get_ttl_hash(seconds: float):
+        """Return the same value withing `seconds` time period
+        https://stackoverflow.com/questions/31771286/python-in-memory-cache-with-time-to-live"""
+        return round(time.time() / seconds)
+
     def _reset_counts(self) -> None:
-        node = self.deck_due_tree(self._current_deck_id)
+        node = self.cached_deck_due_tree(self._current_deck_id, cache_life=self.get_ttl_hash(30))
         if not node:
             # current deck points to a missing deck
             self.newCount = 0
@@ -108,6 +224,129 @@ class Scheduler(SchedulerBaseWithLegacy):
                 break
             # https://anki.tenderapp.com/discussions/beta-testing/1850-cards-marked-as-buried-are-being-scheduled
             if card.queue > -1:
+                timespacing = 7
+                self.rebuildSourcesCache(timespacing)
+
+                if self.skipEmptyCards:
+                    if self.col.tr.card_template_rendering_empty_front() in card.question():
+                        self.bury_cards([card.id], manual=False)
+                        # print(f"{datetime.now()}     Skipping card {card.id}/{card.nid} with empty front.")
+                        continue
+
+                note = self.noteNotes.get(card.nid)
+                source_field = self.getSource(note)
+                sibling_field = self.getSibling(note)
+                # print(f"{datetime.now()} getting source card {card.id}, {source_field}/{sibling_field}...")
+
+                # Only enable siblings burring if there is a source field set
+                if self._burySiblingsOnAnswer and sibling_field:
+                    review_next_card = False
+                    siblings = self.cardSiblingIds[sibling_field]
+                    card_index = siblings.index(card.id)
+
+                    # only allow the user to see the next sibling card if timespacing days have passed since the last sibling
+                    # this allows the user to focus in the current card and only see the next one,
+                    # if he successfully remembered the current card for timespacing days at least.
+                    # between concurrent siblings just today, check if there is a sibling with highest priority!
+                    for cid_index, cid in enumerate(siblings):
+                        if card.id == cid:
+                            continue
+
+                        # should I really focus on this cid?
+                        # review the card.id if it is due today and it has more priority than cid!
+                        if cid_index < card_index:
+                            # check if this is one of the first card reviewed and prioritise it!
+                            # break here if it detected that this card is the highest priority, this would allow
+                            # this card to be first reviewed and it will be the only one because the siblings source
+                            # burying will bury the other siblings.
+                            # but do not break if it is detected to not be the one with highest priority scheduled for today!
+                            if cid in self.cardDueReviewToday:
+                                # print(f"{datetime.now()}     Skipping card {card.id}/{card.nid} "
+                                #         f"for the sibling {cid}, {cid_index:2} < {card_index:2}, "
+                                #         f"{card.template()['name']}, {source_field}/{sibling_field}.")
+                                review_next_card = True
+                                break
+
+                        # this happens when the templates sorting is changed, then, review by the new sorting first!
+                        # if a card.queue is QUEUE_TYPE_NEW, it will never be inside self.cardDueReviewToday or self.cardDueReviewInNextDays!
+                        if card.queue == QUEUE_TYPE_NEW \
+                                and card_index < cid_index \
+                                and cid in self.cardDueReviewToday:
+                            # print(f"{datetime.now()}     Pushing new card first even if it has a sibling being studied these days.")
+                            break
+
+                        # blocks the actual card if it is detected a sibling scheduled in 7 days period.
+                        # notice: if a card is inside self.cardDueReviewInNextDays, it may be inside self.cardDueReviewToday!
+                        if cid in self.cardDueReviewsInLastDays and cid in self.cardDueReviewInNextDays:
+                            actual_period = abs(self.cardDueReviewInNextDays[cid] - self.cardDueReviewsInLastDays[cid])
+
+                            # print(f"{datetime.now()} Analyzing {actual_period:2}/{int(actual_period > timespacing):2}, "
+                            #         f"card {card.id}/{card.nid} for sibling {cid} in {timespacing} days: "
+                            #         f"{card.template()['name']}, {source_field}/{sibling_field}.")
+
+                            # this would fail if a card is scheduled today to be due in 13 days because
+                            # after 7 days this is going skip any siblings of this card,
+                            # but it will not skip this card siblings from tomorrow up to 6 days.
+                            if actual_period > timespacing:
+                                continue
+
+                            review_next_card = True
+                            # print(f"{datetime.now()}     Skipping card because it does has a sibling being studied in these days.")
+                            break
+
+                    if review_next_card:
+                        self.bury_cards([card.id], manual=False)
+                        if card.queue == QUEUE_TYPE_NEW:
+                            self._reset_counts()
+                            self._resetNew()
+                        continue
+
+                if self._burySiblingsOnAnswer and source_field:
+                    # bury related sources
+                    burySet = set()
+                    has_new_card_buried = False
+                    sources = self.cardSourceIds[source_field]
+
+                    # skip new card if it has a sibling waiting for review,
+                    # because reviewing already know content is more important
+                    # than adding more things cluttering knowledge
+                    if card.queue == QUEUE_TYPE_NEW:
+                        review_next_card = False
+                        card_index = sources.index((card.id, QUEUE_TYPE_NEW))
+
+                        for cid_index, (cid, _) in enumerate(sources):
+                            # this happens when the templates sorting is changed, then, review by the new sorting first!
+                            if cid_index < card_index:
+                                # if a card.queue is QUEUE_TYPE_NEW, it will never be inside self.cardDueReviewToday!
+                                if cid in self.cardDueReviewToday:
+                                    # print(f"{datetime.now()} Skipping new card {card.id}/{card.nid} "
+                                    #         f"by source for the sibling pending review "
+                                    #         f"{cid}, {card.template()['name']}, {source_field}/{sibling_field}.")
+                                    self.bury_cards([card.id], manual=False)
+                                    self._reset_counts()
+                                    self._resetNew()
+                                    review_next_card = True
+                                    break
+                            else:
+                                break
+
+                        if review_next_card:
+                            continue
+
+                    for cid, queue_type in sources:
+                        if cid != card.id:
+                            burySet.add(cid)
+                            if queue_type == QUEUE_TYPE_NEW:
+                                has_new_card_buried = True
+
+                    if burySet:
+                        # print(f"{datetime.now()} Burying siblings from card {card.id}/{card.nid} by source "
+                        #     f"{queue_type:2}, {source_field}/{sibling_field}, {burySet}.")
+                        self.bury_cards(burySet, manual=False)
+
+                    if has_new_card_buried:
+                        self._reset_counts()
+                        self._resetNew()
                 break
         if card:
             if not self._burySiblingsOnAnswer:
@@ -170,7 +409,7 @@ class Scheduler(SchedulerBaseWithLegacy):
             return False
         while self._newDids:
             did = self._newDids[0]
-            lim = min(self.queueLimit, self._deckNewLimit(did))
+            lim = min(self.queueLimit, self._deckNewLimit(did, cache_life=self.get_ttl_hash(30)))
             if lim:
                 # fill the queue with the current did
                 self._newQueue = self.col.db.list(
@@ -224,9 +463,11 @@ class Scheduler(SchedulerBaseWithLegacy):
             # shouldn't reach
             return None
 
+    @functools.lru_cache(maxsize=1024)
     def _deckNewLimit(
-        self, did: DeckId, fn: Callable[[DeckDict], int] | None = None
+        self, did: DeckId, fn: Callable[[DeckDict], int] | None = None, cache_life: int = 0
     ) -> int:
+        del cache_life  # shut pylint up
         if not fn:
             fn = self._deckNewLimitSingle
         sel = self.col.decks.get(did)
@@ -968,7 +1209,13 @@ limit ?"""
     def _daysLate(self, card: Card) -> int:
         "Number of days later than scheduled."
         due = card.odue if card.odid else card.due
-        return max(0, self.today - due)
+        delay = max(0, self.today - due)
+        lastIvl = card.lastIvl if hasattr(card, 'lastIvl') else ( card.ivl if hasattr(card, 'ivl') else 5 )
+        lastIvl = lastIvl if lastIvl > 0 else 3
+        # print(f'{card.id} Default delay {delay}, Fixed delay {lastIvl}, Using new {lastIvl < delay}.')
+        if lastIvl < delay:
+            delay = lastIvl
+        return delay
 
     def _updateRevIvl(self, card: Card, ease: int) -> None:
         card.ivl = self._nextRevIvl(card, ease, fuzz=True)
@@ -1124,47 +1371,6 @@ and (queue={QUEUE_TYPE_NEW} or (queue={QUEUE_TYPE_REV} and due<=?))""",
                 queue_obj.remove(cid)
             except ValueError:
                 pass
-
-        # bury related sources
-        from anki.utils import stripHTML
-
-        def getSource(note):
-            if note is None:
-                return None
-
-            def tryGet(field):
-                if field in note:
-                    return note[field]
-                return None
-
-            source = tryGet("Source") or tryGet("source")
-            return stripHTML(source) if source else None
-
-        # print(f'card.id {card.id}')
-        firstsource = getSource(card.note())
-        burySet = set(toBury)
-
-        if self._burySiblingsOnAnswer and firstsource and len(firstsource) > 0:
-            if not hasattr(self, "cardSourceIds"):
-                self.cardSourceIds = {}
-                for nid, flds in self.col.db.execute(f"select id, flds from notes"):
-                    note = self.col.getNote(nid)
-                    source = getSource(note)
-                    if source and len(source) > 0:
-                        card_ids = note.card_ids()
-                        if source in self.cardSourceIds:
-                            self.cardSourceIds[source].append((card_ids, flds))
-                        else:
-                            self.cardSourceIds[source] = [(card_ids, flds)]
-
-            if firstsource in self.cardSourceIds:
-                for card_ids, flds in self.cardSourceIds[firstsource]:
-                    for cid in card_ids:
-                        if cid != card.id:
-                            # print(f"Burring source card '{cid}, {firstsource}' = '{flds}'")
-                            burySet.add(cid)
-        toBury = list(burySet)
-
         # then bury
         if toBury:
             self.bury_cards(toBury, manual=False)
