@@ -36,7 +36,7 @@ QueueConfig = dict[str, Any]
 # revlog types: 0=lrn, 1=rev, 2=relrn, 3=early review
 # positive revlog intervals are in days (rev), negative in seconds (lrn)
 # odue/odid store original due/did when cards moved to filtered deck
-from anki.utils import stripHTML
+from anki.utils import strip_html
 from itertools import zip_longest
 
 
@@ -59,7 +59,7 @@ class Scheduler(SchedulerBaseWithLegacy):
             return None
 
         source = cls.tryGet("Source", note) or cls.tryGet("source", note)
-        return stripHTML(source) if source else None
+        return strip_html(source) if source else None
 
     @classmethod
     def getSibling(cls, note):
@@ -67,7 +67,7 @@ class Scheduler(SchedulerBaseWithLegacy):
             return None
 
         source = cls.tryGet("Sibling", note) or cls.tryGet("sibling", note)
-        return stripHTML(source) if source else None
+        return strip_html(source) if source else None
 
     @staticmethod
     def combineListAlternating(*iterators):
