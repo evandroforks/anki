@@ -199,6 +199,8 @@ class Scheduler(SchedulerBaseWithLegacy):
     def get_ttl_hash(seconds: float):
         """Return the same value withing `seconds` time period
         https://stackoverflow.com/questions/31771286/python-in-memory-cache-with-time-to-live"""
+        if not seconds:
+            return None
         return round(time.time() / seconds)
 
     def _reset_counts(self) -> None:
@@ -231,6 +233,10 @@ class Scheduler(SchedulerBaseWithLegacy):
                     if self.col.tr.card_template_rendering_empty_front() in card.question():
                         self.bury_cards([card.id], manual=False)
                         # print(f"{datetime.now()}     Skipping card {card.id}/{card.nid} with empty front.")
+                        if card.queue == QUEUE_TYPE_NEW:
+                            if self._newDids:
+                                self._newDids.pop(0)  # avoid burring the whole deck
+                            self._reset_counts()
                         continue
 
                 note = self.noteNotes.get(card.nid)
@@ -423,6 +429,8 @@ class Scheduler(SchedulerBaseWithLegacy):
                     return True
             # nothing left in the deck; move to next
             self._newDids.pop(0)
+        else:
+            return False
 
         # if we didn't get a card but the count is non-zero,
         # we need to check again for any cards that were
