@@ -24,7 +24,6 @@ from aqt.utils import (
     askUser,
     disable_help_button,
     downArrow,
-    enable_javascript_playback,
     getOnlyText,
     openHelp,
     restoreGeom,
@@ -352,7 +351,6 @@ class CardLayout(QDialog):
             js=[
                 "js/mathjax.js",
                 "js/vendor/mathjax/tex-chtml.js",
-                "js/vendor/ankimedia.js",
                 "js/reviewer.js",
             ],
             context=self,
@@ -361,7 +359,7 @@ class CardLayout(QDialog):
         self.preview_web.eval("_blockDefaultDragDropBehavior();")
         self.preview_web.set_bridge_command(self._on_bridge_cmd, self)
 
-        enable_javascript_playback(self.preview_web._page.settings())
+        gui_hooks.will_show_web(self.preview_web, "enable")
 
         if self._isCloze():
             nums = list(self.note.cloze_numbers_in_fields())

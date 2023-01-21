@@ -30,7 +30,6 @@ from aqt.sound import av_player, play_clicked_audio
 from aqt.theme import theme_manager
 from aqt.utils import (
     disable_help_button,
-    enable_javascript_playback,
     restoreGeom,
     saveGeom,
     setWindowIcon,
@@ -90,7 +89,7 @@ class Previewer(QDialog):
         self.bbox = QDialogButtonBox()
         self.bbox.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
 
-        enable_javascript_playback(self._web._page.settings())
+        gui_hooks.will_show_web(self._web, "enable")
 
         self._replay = self.bbox.addButton(
             tr.actions_replay_audio(), QDialogButtonBox.ButtonRole.ActionRole
@@ -138,7 +137,6 @@ class Previewer(QDialog):
             js=[
                 "js/mathjax.js",
                 "js/vendor/mathjax/tex-chtml.js",
-                "js/vendor/ankimedia.js",
                 "js/reviewer.js",
             ],
             context=self,

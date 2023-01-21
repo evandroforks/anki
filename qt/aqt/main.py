@@ -75,7 +75,6 @@ from aqt.utils import (
     current_window,
     disable_help_button,
     disallow_full_screen,
-    enable_javascript_playback,
     getFile,
     getOnlyText,
     openHelp,
@@ -869,7 +868,7 @@ title="{}" {}>{}</button>""".format(
             for webview in self.web, self.bottomWeb:
                 webview.force_load_hack()
 
-        enable_javascript_playback(self.web._page.settings())
+        gui_hooks.will_show_web(self.web, "enable")
 
     def closeAllWindows(self, onsuccess: Callable) -> None:
         aqt.dialogs.closeAll(onsuccess)
