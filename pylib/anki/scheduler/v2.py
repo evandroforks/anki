@@ -1365,6 +1365,7 @@ limit ?"""
 
     def _checkLeech(self, card: Card, conf: QueueConfig) -> bool:
         "Leech handler. True if card was a leech."
+        return False
         lf = conf["leechFails"]
         if not lf:
             return False
