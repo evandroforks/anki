@@ -5,8 +5,8 @@
 
 from __future__ import annotations
 
-import random
 import functools
+import random
 import time
 from datetime import datetime, timedelta
 from heapq import *
@@ -33,11 +33,12 @@ QueueConfig = dict[str, Any]
 # queue types: 0=new, 1=(re)lrn, 2=rev, 3=day (re)lrn,
 #   4=preview, -1=suspended, -2=sibling buried, -3=manually buried
 
+from itertools import zip_longest
+
 # revlog types: 0=lrn, 1=rev, 2=relrn, 3=early review
 # positive revlog intervals are in days (rev), negative in seconds (lrn)
 # odue/odid store original due/did when cards moved to filtered deck
 from anki.utils import strip_html
-from itertools import zip_longest
 
 
 class Scheduler(SchedulerBaseWithLegacy):
@@ -75,8 +76,10 @@ class Scheduler(SchedulerBaseWithLegacy):
         # merge("abc", "lmn1234", "xyz9", [None])
         # ['a', 'l', 'x', None, 'b', 'm', 'y', 'c', 'n', 'z', '1', '9', '2', '3', '4']
         return [
-            element for inner_list in zip_longest(*iterators, fillvalue=object)
-            for element in inner_list if element is not object
+            element
+            for inner_list in zip_longest(*iterators, fillvalue=object)
+            for element in inner_list
+            if element is not object
         ]
 
     def rebuildSourcesCache(self, timespacing):
@@ -97,7 +100,7 @@ class Scheduler(SchedulerBaseWithLegacy):
             for cid, queue in self.col.db.execute(f"select id, queue from cards"):
                 self.cardQueuesType[cid] = queue
 
-            for nid, in self.col.db.execute(f"select id from notes order by mid,id"):
+            for (nid,) in self.col.db.execute(f"select id from notes order by mid,id"):
                 note = self.col.get_note(nid)
                 source = self.getSource(note)
                 sibling = self.getSibling(note)
@@ -124,28 +127,38 @@ class Scheduler(SchedulerBaseWithLegacy):
             # intermix items from different note types to not put all cards from other notes at the bottom,
             # this way a card of each note type is studied from each step instead of all from a single note.
             for sibling, list_of_lists in self.cardSiblingIds.items():
-                self.cardSiblingIds[sibling] = self.combineListAlternating(*list_of_lists)
+                self.cardSiblingIds[sibling] = self.combineListAlternating(
+                    *list_of_lists
+                )
 
             timenow = datetime.now()
             timedaysago = timenow - timedelta(days=timespacing)
             timenowid = int(timenow.timestamp() * 1000)
             timedaysagoid = int(timedaysago.timestamp() * 1000)
-            creation_timestamp = datetime.fromtimestamp(self.col.db.scalar("select crt from col"))
+            creation_timestamp = datetime.fromtimestamp(
+                self.col.db.scalar("select crt from col")
+            )
 
-            for cid, in self.col.db.execute(f"select id from cards where "
-                    f"queue in ({QUEUE_TYPE_LRN},{QUEUE_TYPE_REV},{QUEUE_TYPE_DAY_LEARN_RELEARN},{QUEUE_TYPE_PREVIEW}) "
-                    f"and due <= {self.today}"):
+            for (cid,) in self.col.db.execute(
+                f"select id from cards where "
+                f"queue in ({QUEUE_TYPE_LRN},{QUEUE_TYPE_REV},{QUEUE_TYPE_DAY_LEARN_RELEARN},{QUEUE_TYPE_PREVIEW}) "
+                f"and due <= {self.today}"
+            ):
                 self.cardDueReviewToday.add(cid)
 
-            for seconds, cid, in self.col.db.execute(f"select id, cid from revlog where "
-                    f"id > {timedaysagoid} and id < {timenowid}"):
-                review_date = datetime.fromtimestamp(seconds/1000)
+            for seconds, cid, in self.col.db.execute(
+                f"select id, cid from revlog where "
+                f"id > {timedaysagoid} and id < {timenowid}"
+            ):
+                review_date = datetime.fromtimestamp(seconds / 1000)
                 delta = review_date - creation_timestamp
                 self.cardDueReviewsInLastDays[cid] = delta.days
 
-            for cid, due in self.col.db.execute(f"select id, due from cards where "
-                    f"queue in ({QUEUE_TYPE_LRN},{QUEUE_TYPE_REV},{QUEUE_TYPE_DAY_LEARN_RELEARN},{QUEUE_TYPE_PREVIEW}) "
-                    f"and due <= {self.today + timespacing} and due >= {self.today}"):
+            for cid, due in self.col.db.execute(
+                f"select id, due from cards where "
+                f"queue in ({QUEUE_TYPE_LRN},{QUEUE_TYPE_REV},{QUEUE_TYPE_DAY_LEARN_RELEARN},{QUEUE_TYPE_PREVIEW}) "
+                f"and due <= {self.today + timespacing} and due >= {self.today}"
+            ):
                 self.cardDueReviewInNextDays[cid] = due
 
     def __init__(self, col: anki.collection.Collection) -> None:
@@ -204,7 +217,9 @@ class Scheduler(SchedulerBaseWithLegacy):
         return round(time.time() / seconds)
 
     def _reset_counts(self) -> None:
-        node = self.cached_deck_due_tree(self._current_deck_id, cache_life=self.get_ttl_hash(30))
+        node = self.cached_deck_due_tree(
+            self._current_deck_id, cache_life=self.get_ttl_hash(30)
+        )
         if not node:
             # current deck points to a missing deck
             self.newCount = 0
@@ -230,7 +245,10 @@ class Scheduler(SchedulerBaseWithLegacy):
                 self.rebuildSourcesCache(timespacing)
 
                 if self.skipEmptyCards:
-                    if self.col.tr.card_template_rendering_empty_front() in card.question():
+                    if (
+                        self.col.tr.card_template_rendering_empty_front()
+                        in card.question()
+                    ):
                         self.bury_cards([card.id], manual=False)
                         # print(f"{datetime.now()}     Skipping card {card.id}/{card.nid} with empty front.")
                         if card.queue == QUEUE_TYPE_NEW:
@@ -275,16 +293,24 @@ class Scheduler(SchedulerBaseWithLegacy):
 
                         # this happens when the templates sorting is changed, then, review by the new sorting first!
                         # if a card.queue is QUEUE_TYPE_NEW, it will never be inside self.cardDueReviewToday or self.cardDueReviewInNextDays!
-                        if card.queue == QUEUE_TYPE_NEW \
-                                and card_index < cid_index \
-                                and cid in self.cardDueReviewToday:
+                        if (
+                            card.queue == QUEUE_TYPE_NEW
+                            and card_index < cid_index
+                            and cid in self.cardDueReviewToday
+                        ):
                             # print(f"{datetime.now()}     Pushing new card first even if it has a sibling being studied these days.")
                             break
 
                         # blocks the actual card if it is detected a sibling scheduled in 7 days period.
                         # notice: if a card is inside self.cardDueReviewInNextDays, it may be inside self.cardDueReviewToday!
-                        if cid in self.cardDueReviewsInLastDays and cid in self.cardDueReviewInNextDays:
-                            actual_period = abs(self.cardDueReviewInNextDays[cid] - self.cardDueReviewsInLastDays[cid])
+                        if (
+                            cid in self.cardDueReviewsInLastDays
+                            and cid in self.cardDueReviewInNextDays
+                        ):
+                            actual_period = abs(
+                                self.cardDueReviewInNextDays[cid]
+                                - self.cardDueReviewsInLastDays[cid]
+                            )
 
                             # print(f"{datetime.now()} Analyzing {actual_period:2}/{int(actual_period > timespacing):2}, "
                             #         f"card {card.id}/{card.nid} for sibling {cid} in {timespacing} days: "
@@ -415,7 +441,10 @@ class Scheduler(SchedulerBaseWithLegacy):
             return False
         while self._newDids:
             did = self._newDids[0]
-            lim = min(self.queueLimit, self._deckNewLimit(did, cache_life=self.get_ttl_hash(30)))
+            lim = min(
+                self.queueLimit,
+                self._deckNewLimit(did, cache_life=self.get_ttl_hash(30)),
+            )
             if lim:
                 # fill the queue with the current did
                 self._newQueue = self.col.db.list(
@@ -473,7 +502,10 @@ class Scheduler(SchedulerBaseWithLegacy):
 
     @functools.lru_cache(maxsize=1024)
     def _deckNewLimit(
-        self, did: DeckId, fn: Callable[[DeckDict], int] | None = None, cache_life: int = 0
+        self,
+        did: DeckId,
+        fn: Callable[[DeckDict], int] | None = None,
+        cache_life: int = 0,
     ) -> int:
         del cache_life  # shut pylint up
         if not fn:
@@ -1218,7 +1250,11 @@ limit ?"""
         "Number of days later than scheduled."
         due = card.odue if card.odid else card.due
         delay = max(0, self.today - due)
-        lastIvl = card.lastIvl if hasattr(card, 'lastIvl') else ( card.ivl if hasattr(card, 'ivl') else 5 )
+        lastIvl = (
+            card.lastIvl
+            if hasattr(card, "lastIvl")
+            else (card.ivl if hasattr(card, "ivl") else 5)
+        )
         lastIvl = lastIvl if lastIvl > 0 else 3
         # print(f'{card.id} Default delay {delay}, Fixed delay {lastIvl}, Using new {lastIvl < delay}.')
         if lastIvl < delay:
