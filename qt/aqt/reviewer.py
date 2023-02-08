@@ -866,7 +866,6 @@ time = %(time)d;
             [tr.actions_options(), "Ctrl+Shift+o", self.onOptions],
             [tr.actions_card_info(), "Ctrl+i", self.on_card_info],
             [tr.actions_previous_card_info(), "Ctrl+o", self.on_previous_card_info],
-            ["Toggle skip empty cards", "None", self.toggle_skip_empty_cards],
             None,
             [tr.studying_mark_note(), "Ctrl+*", self.toggle_mark_on_current_note],
             [tr.studying_bury_note(), "Ctrl+=", self.bury_current_note],

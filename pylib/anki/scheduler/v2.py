@@ -85,7 +85,6 @@ class Scheduler(SchedulerBaseWithLegacy):
     def rebuildSourcesCache(self, timespacing):
         # rebuilds the cache if Anki stayed open over night
         if not hasattr(self, "cardSourceIds") or self.cardSourceIdsTime < self.today:
-            self.skipEmptyCards = False
             self.cardSourceIdsTime = self.today
             self.cardSourceIds = {}
             self.cardSiblingIds = {}
@@ -171,6 +170,7 @@ class Scheduler(SchedulerBaseWithLegacy):
         self._lrnCutoff = 0
         self._active_decks: list[DeckId] = []
         self._current_deck_id = DeckId(1)
+        self.skipEmptyCards = False
 
     @property
     def active_decks(self) -> list[DeckId]:

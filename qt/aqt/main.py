@@ -1331,6 +1331,7 @@ title="{}" {}>{}</button>""".format(
         qconnect(m.actionStudyDeck.triggered, self.onStudyDeck)
         qconnect(m.actionCreateFiltered.triggered, self.onCram)
         qconnect(m.actionEmptyCards.triggered, self.onEmptyCards)
+        qconnect(m.actionToggleSkipEmptyCards.triggered, self.onToggleSkipEmptyCards)
         qconnect(m.actionNoteTypes.triggered, self.onNoteTypes)
         qconnect(m.actionPreferences.triggered, self.onPrefs)
 
@@ -1628,6 +1629,9 @@ title="{}" {}>{}</button>""".format(
 
     def onEmptyCards(self) -> None:
         show_empty_cards(self)
+
+    def onToggleSkipEmptyCards(self) -> None:
+        self.reviewer.toggle_skip_empty_cards()
 
     # Debugging
     ######################################################################

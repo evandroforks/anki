@@ -89,6 +89,7 @@
     <addaction name="actionCheckMediaDatabase"/>
     <addaction name="actionEmptyCards"/>
     <addaction name="separator"/>
+    <addaction name="actionToggleSkipEmptyCards"/>
     <addaction name="actionAdd_ons"/>
     <addaction name="separator"/>
     <addaction name="actionNoteTypes"/>
@@ -212,6 +213,11 @@
   <action name="actionEmptyCards">
    <property name="text">
     <string>qt_misc_empty_cards</string>
+   </property>
+  </action>
+  <action name="actionToggleSkipEmptyCards">
+   <property name="text">
+    <string>qt_toggle_skip_empty_cards</string>
    </property>
   </action>
   <action name="actionCreateFiltered">
