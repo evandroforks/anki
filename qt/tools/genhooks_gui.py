@@ -264,7 +264,7 @@ hooks = [
         args=["text: str", "card: Card", "kind: str"],
         return_type="str",
         legacy_hook="prepareQA",
-        doc="""Can modify card text before review/preview.""",
+        doc="Can modify card text before review/preview.",
     ),
     # reviewer, main and clayout
     Hook(
