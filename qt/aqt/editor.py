@@ -813,7 +813,7 @@ require("anki/ui").loaded.then(() => require("anki/NoteEditor").instances[0].too
             return f'<img src="{name}">'
         else:
             av_player.play_file(fname)
-            return f"[sound:{html.escape(fname, quote=False)}]"
+            return f'<audio src="{html.escape(fname, quote=False)}" controlslist="nodownload" controls=""></audio>'
 
     def urlToFile(self, url: str) -> str | None:
         l = url.lower()
@@ -1416,7 +1416,7 @@ class EditorWebView(AnkiWebView):
                     # if there's more than one consecutive space,
                     # use non-breaking spaces for the second one on
                     def repl(match: Match) -> str:
-                        return f"{match.group(1).replace(' ', '&nbsp;')} "
+                        return f"{match.group(1).replace(' ', ' ')} "
 
                     token = re.sub(" ( +)", repl, token)
                     processed.append(token)

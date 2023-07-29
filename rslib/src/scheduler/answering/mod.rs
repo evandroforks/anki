@@ -371,7 +371,7 @@ impl Collection {
     }
 
     fn add_leech_tag(&mut self, nid: NoteId) -> Result<()> {
-        self.add_tags_to_notes_inner(&[nid], "leech")?;
+        // self.add_tags_to_notes_inner(&[nid], "leech")?;
         Ok(())
     }
 }

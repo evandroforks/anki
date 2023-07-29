@@ -511,36 +511,35 @@ class Reviewer:
             (" ", self.onEnterKey),
             (Qt.Key.Key_Return, self.onEnterKey),
             (Qt.Key.Key_Enter, self.onEnterKey),
-            ("m", self.showContextMenu),
+            # ("m", self.showContextMenu),
             ("r", self.replayAudio),
             (Qt.Key.Key_F5, self.replayAudio),
             *(
                 (f"Ctrl+{flag.index}", self.set_flag_func(flag.index))
                 for flag in self.mw.flags.all()
             ),
-            ("*", self.toggle_mark_on_current_note),
-            ("=", self.bury_current_note),
-            ("-", self.bury_current_card),
-            ("!", self.suspend_current_note),
-            ("@", self.suspend_current_card),
+            ("Ctrl+*", self.toggle_mark_on_current_note),
+            ("Ctrl+=", self.bury_current_note),
+            ("Ctrl+-", self.bury_current_card),
+            ("Ctrl+!", self.suspend_current_note),
+            ("Ctrl+@", self.suspend_current_card),
             ("Ctrl+Alt+N", self.forget_current_card),
             ("Ctrl+Alt+E", self.on_create_copy),
             ("Ctrl+Delete", self.delete_current_note),
             ("Ctrl+Shift+D", self.on_set_due),
             ("v", self.onReplayRecorded),
             ("Shift+v", self.onRecordVoice),
-            ("o", self.onOptions),
-            ("i", self.on_card_info),
-            ("Ctrl+Alt+i", self.on_previous_card_info),
+            ("Ctrl+Shift+o", self.onOptions),
+            ("Ctrl+i", self.on_card_info),
+            ("Ctrl+o", self.on_previous_card_info),
             *(
                 (key, functools.partial(self._answerCard, ease))
                 for ease in aqt.mw.pm.default_answer_keys
                 if (key := aqt.mw.pm.get_answer_key(ease))
             ),
-            ("u", self.mw.undo),
-            ("5", self.on_pause_audio),
-            ("6", self.on_seek_backward),
-            ("7", self.on_seek_forward),
+            ("F4", self.on_pause_audio),
+            ("F6", self.on_seek_backward),
+            ("F7", self.on_seek_forward),
             *self.korean_shortcuts(),
         ]
 
@@ -889,7 +888,7 @@ time = %(time)d;
                     for flag in self.mw.flags.all()
                 ],
             ],
-            [tr.studying_bury_card(), "-", self.bury_current_card],
+            [tr.studying_bury_card(), "Ctrl+-", self.bury_current_card],
             [
                 tr.actions_with_ellipsis(action=tr.actions_forget_card()),
                 "Ctrl+Alt+N",
@@ -900,14 +899,14 @@ time = %(time)d;
                 "Ctrl+Shift+D",
                 self.on_set_due,
             ],
-            [tr.actions_suspend_card(), "@", self.suspend_current_card],
-            [tr.actions_options(), "O", self.onOptions],
-            [tr.actions_card_info(), "I", self.on_card_info],
-            [tr.actions_previous_card_info(), "Ctrl+Alt+I", self.on_previous_card_info],
+            [tr.actions_suspend_card(), "Ctrl+@", self.suspend_current_card],
+            [tr.actions_options(), "Ctrl+Shift+o", self.onOptions],
+            [tr.actions_card_info(), "Ctrl+i", self.on_card_info],
+            [tr.actions_previous_card_info(), "Ctrl+o", self.on_previous_card_info],
             None,
-            [tr.studying_mark_note(), "*", self.toggle_mark_on_current_note],
-            [tr.studying_bury_note(), "=", self.bury_current_note],
-            [tr.studying_suspend_note(), "!", self.suspend_current_note],
+            [tr.studying_mark_note(), "Ctrl+*", self.toggle_mark_on_current_note],
+            [tr.studying_bury_note(), "Ctrl+=", self.bury_current_note],
+            [tr.studying_suspend_note(), "Ctrl+!", self.suspend_current_note],
             [
                 tr.actions_with_ellipsis(action=tr.actions_create_copy()),
                 "Ctrl+Alt+E",
@@ -916,9 +915,9 @@ time = %(time)d;
             [tr.studying_delete_note(), "Ctrl+Delete", self.delete_current_note],
             None,
             [tr.actions_replay_audio(), "R", self.replayAudio],
-            [tr.studying_pause_audio(), "5", self.on_pause_audio],
-            [tr.studying_audio_5s(), "6", self.on_seek_backward],
-            [tr.studying_audio_and5s(), "7", self.on_seek_forward],
+            [tr.studying_pause_audio(), "F4", self.on_pause_audio],
+            [tr.studying_audio_5s(), "F6", self.on_seek_backward],
+            [tr.studying_audio_and5s(), "F7", self.on_seek_forward],
             [tr.studying_record_own_voice(), "Shift+V", self.onRecordVoice],
             [tr.studying_replay_own_voice(), "V", self.onReplayRecorded],
         ]
@@ -958,6 +957,9 @@ time = %(time)d;
 
     def onOptions(self) -> None:
         confirm_deck_then_display_options(self.card)
+
+    def toggle_skip_empty_cards(self) -> None:
+        self.mw.col.sched.skipEmptyCards = not self.mw.col.sched.skipEmptyCards
 
     def on_previous_card_info(self) -> None:
         self._previous_card_info.toggle()

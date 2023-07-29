@@ -1102,7 +1102,7 @@ title="{}" {}>{}</button>""".format(
             ("a", self.onAddCard),
             ("b", self.onBrowse),
             ("t", self.onStats),
-            ("Shift+t", self.onStats),
+            ("Ctrl+t", self.onStats),
             ("y", self.on_sync_button_clicked),
         ]
         self.applyShortcuts(globalShortcuts)
@@ -1338,6 +1338,7 @@ title="{}" {}>{}</button>""".format(
         qconnect(m.actionStudyDeck.triggered, self.onStudyDeck)
         qconnect(m.actionCreateFiltered.triggered, self.onCram)
         qconnect(m.actionEmptyCards.triggered, self.onEmptyCards)
+        qconnect(m.actionToggleSkipEmptyCards.triggered, self.onToggleSkipEmptyCards)
         qconnect(m.actionNoteTypes.triggered, self.onNoteTypes)
         qconnect(m.actionPreferences.triggered, self.onPrefs)
 
@@ -1635,6 +1636,9 @@ title="{}" {}>{}</button>""".format(
 
     def onEmptyCards(self) -> None:
         show_empty_cards(self)
+
+    def onToggleSkipEmptyCards(self) -> None:
+        self.reviewer.toggle_skip_empty_cards()
 
     # System specific code
     ##########################################################################
