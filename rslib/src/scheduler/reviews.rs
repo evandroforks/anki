@@ -135,7 +135,7 @@ impl Collection {
                 let days_from_today = distribution.sample(&mut rng);
                 card.set_due_date(today, days_from_today, ease_factor, spec.force_reset);
                 col.log_manually_scheduled_review(&card, &original, usn)?;
-                col.update_card_inner(&mut card, original, usn)?;
+                col.update_card_inner(&mut card, original, usn, false)?;
             }
             if let Some(key) = context {
                 col.set_config_string_inner(key, days)?;

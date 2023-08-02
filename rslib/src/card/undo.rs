@@ -21,7 +21,7 @@ impl Collection {
                     .storage
                     .get_card(card.id)?
                     .or_invalid("card disappeared")?;
-                self.update_card_undoable(&mut card, current)
+                self.update_card_undoable(&mut card, current, false)
             }
             UndoableCardChange::Removed(card) => self.restore_deleted_card(*card),
             UndoableCardChange::GraveAdded(e) => self.remove_card_grave(e.0, e.1),
@@ -43,9 +43,11 @@ impl Collection {
         Ok(added)
     }
 
-    pub(super) fn update_card_undoable(&mut self, card: &mut Card, original: Card) -> Result<()> {
+    pub(super) fn update_card_undoable(&mut self, card: &mut Card, original: Card, skip_undo: bool) -> Result<()> {
         require!(card.id.0 != 0, "card id not set");
-        self.save_undo(UndoableCardChange::Updated(Box::new(original)));
+        if !skip_undo {
+            self.save_undo(UndoableCardChange::Updated(Box::new(original)));
+        }
         self.storage.update_card(card)
     }
 

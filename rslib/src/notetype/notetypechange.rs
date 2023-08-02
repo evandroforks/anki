@@ -323,7 +323,7 @@ impl Collection {
                 let original = card.clone();
                 card.template_idx =
                     *map.remapped.get(&(card.template_idx as usize)).unwrap() as u16;
-                self.update_card_inner(&mut card, original, usn)?;
+                self.update_card_inner(&mut card, original, usn, false)?;
             }
         }
 

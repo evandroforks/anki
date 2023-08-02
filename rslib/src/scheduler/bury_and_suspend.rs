@@ -55,7 +55,7 @@ impl Collection {
         for original in cards {
             let mut card = original.clone();
             if card.restore_queue_after_bury_or_suspend() {
-                self.update_card_inner(&mut card, original, usn)?;
+                self.update_card_inner(&mut card, original, usn, false)?;
             }
         }
         Ok(())
@@ -114,7 +114,7 @@ impl Collection {
                     }
                     card.queue = desired_queue;
                     count += 1;
-                    self.update_card_inner(&mut card, original, usn)?;
+                    self.update_card_inner(&mut card, original, usn, mode == BuryOrSuspendMode::BurySched)?;
                 }
             }
         }

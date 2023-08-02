@@ -240,7 +240,7 @@ impl Collection {
             self.transact(Op::UpdateCard, |col| {
                 for mut card in cards {
                     let existing = col.storage.get_card(card.id)?.or_not_found(card.id)?;
-                    col.update_card_inner(&mut card, existing, col.usn()?)?
+                    col.update_card_inner(&mut card, existing, col.usn()?, false)?
                 }
                 Ok(())
             })
@@ -248,7 +248,7 @@ impl Collection {
             self.transact_no_undo(|col| {
                 for mut card in cards {
                     let existing = col.storage.get_card(card.id)?.or_not_found(card.id)?;
-                    col.update_card_inner(&mut card, existing, col.usn()?)?;
+                    col.update_card_inner(&mut card, existing, col.usn()?, false)?;
                 }
                 Ok(OpOutput {
                     output: (),
@@ -272,7 +272,7 @@ impl Collection {
         let orig = self.storage.get_card(cid)?.or_invalid("no such card")?;
         let mut card = orig.clone();
         func(&mut card)?;
-        self.update_card_inner(&mut card, orig, self.usn()?)?;
+        self.update_card_inner(&mut card, orig, self.usn()?, false)?;
         Ok(card)
     }
 
@@ -282,9 +282,10 @@ impl Collection {
         card: &mut Card,
         original: Card,
         usn: Usn,
+        skip_undo: bool,
     ) -> Result<()> {
         card.set_modified(usn);
-        self.update_card_undoable(card, original)
+        self.update_card_undoable(card, original, skip_undo)
     }
 
     pub(crate) fn add_card(&mut self, card: &mut Card) -> Result<()> {
@@ -333,7 +334,7 @@ impl Collection {
                 let original = card.clone();
                 steps_adjuster.adjust_remaining_steps(col, &mut card)?;
                 card.set_deck(deck_id, sched);
-                col.update_card_inner(&mut card, original, usn)?;
+                col.update_card_inner(&mut card, original, usn, false)?;
             }
             Ok(count)
         })
@@ -352,7 +353,7 @@ impl Collection {
                     // To avoid having to rebuild the study queues, we mark the card as requiring
                     // a sync, but do not change its modification time.
                     card.usn = usn;
-                    col.update_card_undoable(&mut card, original)?;
+                    col.update_card_undoable(&mut card, original, false)?;
                     count += 1;
                 }
             }
@@ -384,7 +385,7 @@ impl Collection {
         if let Some(new_remaining) = card.new_remaining_steps(new_steps, old_steps) {
             let original = card.clone();
             card.remaining_steps = new_remaining;
-            self.update_card_inner(card, original, usn)
+            self.update_card_inner(card, original, usn, false)
         } else {
             Ok(())
         }

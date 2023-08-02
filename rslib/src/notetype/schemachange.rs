@@ -159,7 +159,7 @@ impl Collection {
             for mut card in self.all_cards_for_search(nt.id.and(ords))? {
                 let original = card.clone();
                 card.template_idx = *changes.moved.get(&card.template_idx).unwrap();
-                self.update_card_inner(&mut card, original, usn)?;
+                self.update_card_inner(&mut card, original, usn, false)?;
             }
         }
 

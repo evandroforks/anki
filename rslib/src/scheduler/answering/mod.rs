@@ -276,7 +276,7 @@ impl Collection {
             card.custom_data = data;
             card.validate_custom_data()?;
         }
-        self.update_card_inner(&mut card, original, usn)?;
+        self.update_card_inner(&mut card, original, usn, false)?;
         if answer.new_state.leeched() {
             self.add_leech_tag(card.note_id)?;
         }
