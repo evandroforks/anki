@@ -508,7 +508,7 @@ class Reviewer:
     ) -> Sequence[Union[tuple[str, Callable], tuple[Qt.Key, Callable]]]:
         return [
             ("e", self.mw.onEditCurrent),
-            (" ", self.onEnterKey),
+            (" ", self.on_pause_audio),
             (Qt.Key.Key_Return, self.onEnterKey),
             (Qt.Key.Key_Enter, self.onEnterKey),
             # ("m", self.showContextMenu),
@@ -539,7 +539,9 @@ class Reviewer:
             ),
             ("F4", self.on_pause_audio),
             ("F6", self.on_seek_backward),
+            (Qt.Key.Key_Left, self.on_seek_backward),
             ("F7", self.on_seek_forward),
+            (Qt.Key.Key_Right, self.on_seek_forward),
             *self.korean_shortcuts(),
         ]
 
@@ -547,7 +549,7 @@ class Reviewer:
         av_player.toggle_pause()
         gui_hooks.audio_did_pause_or_unpause(self.web)
 
-    seek_secs = 5
+    seek_secs = 1
 
     def on_seek_backward(self) -> None:
         av_player.seek_relative(-self.seek_secs)
