@@ -249,7 +249,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                         self.col.tr.card_template_rendering_empty_front()
                         in card.question()
                     ):
-                        self.bury_cards([card.id], manual=False)
+                        self.set_due_date([card.id], "1-7")
                         # print(f"{datetime.now()}     Skipping card {card.id}/{card.nid} with empty front.")
                         if card.queue == QUEUE_TYPE_NEW:
                             if self._newDids:
@@ -327,7 +327,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                             break
 
                     if review_next_card:
-                        self.bury_cards([card.id], manual=False)
+                        self.set_due_date([card.id], "1-7")
                         if card.queue == QUEUE_TYPE_NEW:
                             self._reset_counts()
                             self._resetNew()
@@ -354,7 +354,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                                     # print(f"{datetime.now()} Skipping new card {card.id}/{card.nid} "
                                     #         f"by source for the sibling pending review "
                                     #         f"{cid}, {card.template()['name']}, {source_field}/{sibling_field}.")
-                                    self.bury_cards([card.id], manual=False)
+                                    self.set_due_date([card.id], "1-7")
                                     self._reset_counts()
                                     self._resetNew()
                                     review_next_card = True
@@ -374,7 +374,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                     if burySet:
                         # print(f"{datetime.now()} Burying siblings from card {card.id}/{card.nid} by source "
                         #     f"{queue_type:2}, {source_field}/{sibling_field}, {burySet}.")
-                        self.bury_cards(burySet, manual=False)
+                        self.set_due_date(burySet, "1-7")
 
                     if has_new_card_buried:
                         self._reset_counts()
