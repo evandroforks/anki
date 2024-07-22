@@ -249,7 +249,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                         self.col.tr.card_template_rendering_empty_front()
                         in card.question()
                     ):
-                        self.set_due_date([card.id], "1-7")
+                        self.bury_cards([card.id], manual=False)
                         # print(f"{datetime.now()}     Skipping card {card.id}/{card.nid} with empty front.")
                         if card.queue == QUEUE_TYPE_NEW:
                             if self._newDids:
@@ -317,7 +317,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                             #         f"{card.template()['name']}, {source_field}/{sibling_field}.")
 
                             # this would fail if a card is scheduled today to be due in 13 days because
-                            # after 7 days this is going skip any siblings of this card,
+                            # after 7 days this is going to skip any siblings of this card,
                             # but it will not skip this card siblings from tomorrow up to 6 days.
                             if actual_period > timespacing:
                                 continue
@@ -327,7 +327,9 @@ class Scheduler(SchedulerBaseWithLegacy):
                             break
 
                     if review_next_card:
-                        self.set_due_date([card.id], "1-7")
+                        # set all siblings to the same day so they card template ordering is preserved
+                        next_available_start_date = min(max(timespacing - actual_period, 1) + 1, 8)
+                        self.set_due_date([card.id], f"{next_available_start_date}")
                         if card.queue == QUEUE_TYPE_NEW:
                             self._reset_counts()
                             self._resetNew()
