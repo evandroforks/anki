@@ -330,6 +330,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                         # set all siblings to the same day so they card template ordering is preserved
                         next_available_start_date = min(max(timespacing - actual_period, 1) + 1, 8)
                         self.set_due_date([card.id], f"{next_available_start_date}")
+                        self.bury_cards([card.id], manual=False)
                         if card.queue == QUEUE_TYPE_NEW:
                             self._reset_counts()
                             self._resetNew()
@@ -357,6 +358,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                                     #         f"by source for the sibling pending review "
                                     #         f"{cid}, {card.template()['name']}, {source_field}/{sibling_field}.")
                                     self.set_due_date([card.id], "1-7")
+                                    self.bury_cards([card.id], manual=False)
                                     self._reset_counts()
                                     self._resetNew()
                                     review_next_card = True
@@ -377,6 +379,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                         # print(f"{datetime.now()} Burying siblings from card {card.id}/{card.nid} by source "
                         #     f"{queue_type:2}, {source_field}/{sibling_field}, {burySet}.")
                         self.set_due_date(burySet, "1-7")
+                        self.bury_cards(burySet, manual=False)
 
                     if has_new_card_buried:
                         self._reset_counts()
