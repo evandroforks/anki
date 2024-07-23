@@ -267,6 +267,7 @@ class Scheduler(SchedulerBaseWithLegacy):
                     review_next_card = False
                     siblings = self.cardSiblingIds[sibling_field]
                     card_index = siblings.index(card.id)
+                    actual_period = 0
 
                     # only allow the user to see the next sibling card if timespacing days have passed since the last sibling
                     # this allows the user to focus in the current card and only see the next one,
