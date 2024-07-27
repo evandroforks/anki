@@ -56,6 +56,7 @@ def check_for_update() -> None:
 
 
 def prompt_to_update(mw: aqt.AnkiQt, ver: str) -> None:
+    return
     msg = (
         tr.qt_misc_anki_updatedanki_has_been_released(val=ver)
         + tr.qt_misc_would_you_like_to_download_it()

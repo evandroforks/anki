@@ -96,7 +96,12 @@ from aqt.profiles import ProfileManager, VideoDriver  # isort:skip
 profiler: cProfile.Profile | None = None
 mw: AnkiQt | None = None  # set on init
 
+import tracemalloc
+
 import aqt.forms
+
+tracemalloc.start()
+
 
 # Dialog manager
 ##########################################################################
@@ -312,6 +317,9 @@ class AnkiApp(QApplication):
     TMOUT = 30000
 
     def __init__(self, argv: list[str]) -> None:
+        # # https://stackoverflow.com/questions/33730771/qtwebengine-not-allowed-to-load-local-resource-for-iframe-how-to-disable-web
+        # # Enable it only for local tests due security issues
+        # sys.argv.append("--disable-web-security")
         QApplication.__init__(self, argv)
         self.installEventFilter(self)
         self._argv = argv

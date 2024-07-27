@@ -77,6 +77,7 @@ class DeprecatedNamesMixin:
                 remapped, replacement = _get_remapped_and_replacement(self, name)
                 out = getattr(self, remapped)
             except AttributeError:
+                # return super().__getattribute__(name)
                 raise AttributeError(
                     f"'{self.__class__.__name__}' object has no attribute '{name}'"
                 ) from None
